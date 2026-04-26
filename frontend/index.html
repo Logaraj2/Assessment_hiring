@@ -50,6 +50,13 @@
                 </div>
                 <div class="output-box" id="assessmentOutput" style="display: none;">
                     <h3>💬 Assessment Chat</h3>
+                    <div id="cameraContainer" style="display: none; margin-bottom: 15px;">
+                        <video id="cameraVideo" autoplay muted style="width: 100%; max-width: 400px; border-radius: 8px; border: 2px solid #667eea;"></video>
+                        <div style="margin-top: 10px;">
+                            <button class="btn-secondary" onclick="stopCamera()" style="margin-right: 10px;">Stop Camera</button>
+                            <span id="cameraStatus" style="color: #667eea;">📹 Camera is on</span>
+                        </div>
+                    </div>
                     <div id="assessmentContent"></div>
                     <div id="chatInputArea" style="display: none;">
                         <div class="chat-input-group">
@@ -93,6 +100,7 @@
         let planNeedsRetry = false;
         let pendingPlanData = null;
         let planRetryInterval = null;
+        let cameraStream = null;
 
         async function handleApiError(response) {
             const data = await response.json();
@@ -151,6 +159,9 @@
             showLoading('assessment', true);
             document.getElementById('assessmentOutput').style.display = 'block';
 
+            // Start camera when assessment begins
+            startCamera();
+
             try {
                 const response = await fetch(`${API_BASE}/assess`, {
                     method: 'POST',
@@ -197,6 +208,9 @@
                 showLoading('assessment', false);
                 showError('assessment', error.message);
                 document.getElementById('startBtn').disabled = false;
+                
+                // Stop camera if assessment fails
+                stopCamera();
             }
         }
 
@@ -297,6 +311,9 @@
             assessmentData = data;
             document.getElementById('chatInputArea').style.display = 'none';
             document.getElementById('startBtn').disabled = false;
+            
+            // Stop camera when assessment completes
+            stopCamera();
 
             // Show assessment summary
             let html = '<h4 style="margin-top:20px">📊 Assessment Summary</h4>';
@@ -511,6 +528,45 @@
 
         function formatText(text) {
             return text.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        }
+
+        async function startCamera() {
+            try {
+                const video = document.getElementById('cameraVideo');
+                const container = document.getElementById('cameraContainer');
+                
+                // Request camera access
+                cameraStream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        width: { ideal: 640 },
+                        height: { ideal: 480 }
+                    } 
+                });
+                
+                // Attach stream to video element
+                video.srcObject = cameraStream;
+                
+                // Show camera container
+                container.style.display = 'block';
+                
+                console.log('Camera started successfully');
+            } catch (error) {
+                console.error('Error accessing camera:', error);
+                alert('Unable to access camera. Please ensure you have granted camera permissions.');
+            }
+        }
+
+        function stopCamera() {
+            if (cameraStream) {
+                // Stop all tracks
+                cameraStream.getTracks().forEach(track => track.stop());
+                cameraStream = null;
+                
+                // Hide camera container
+                document.getElementById('cameraContainer').style.display = 'none';
+                
+                console.log('Camera stopped');
+            }
         }
 
         // Allow Enter to send in chat
