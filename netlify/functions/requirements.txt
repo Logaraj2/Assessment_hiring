@@ -1,0 +1,7 @@
+fastapi
+httpx
+pydantic
+pydantic-settings
+PyPDF2
+python-docx
+python-multipart

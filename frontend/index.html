@@ -90,7 +90,7 @@
     </div>
 
     <script>
-        const API_BASE = 'http://localhost:8000/api';
+        const API_BASE = '/api';
         let conversationHistory = [];
         let jobDescription = '';
         let resumeText = '';
@@ -585,13 +585,17 @@
             status.textContent = 'Uploading...';
             status.className = 'upload-status status-info';
 
-            const formData = new FormData();
-            formData.append('file', file);
-
             try {
+                const arrayBuffer = await file.arrayBuffer();
+                const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+
                 const response = await fetch(`${API_BASE}/upload-resume`, {
                     method: 'POST',
-                    body: formData
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        file: base64,
+                        filename: file.name
+                    })
                 });
 
                 if (!response.ok) {

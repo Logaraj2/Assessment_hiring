@@ -4,19 +4,80 @@
 
 An intelligent agent that assesses candidates' real proficiency against job requirements and generates personalized learning roadmaps with curated resources and realistic time estimates.
 
-## Quick Start
+## Deployment on Netlify
 
 ### Prerequisites
-- Python 3.9+
-- OpenRouter API key (free models available - no payment needed)
+- Netlify account
+- GitHub repository
+- OpenRouter API key (free models available)
 
 ### Setup Instructions
 
-#### 1. Clone & Navigate
+#### 1. Push to GitHub
+```bash
+git add .
+git commit -m "Prepare for Netlify deployment"
+git push origin main
+```
+
+#### 2. Connect to Netlify
+1. Go to [Netlify](https://netlify.com)
+2. Click "New site from Git"
+3. Connect your GitHub repository
+4. Configure build settings:
+   - **Build command**: (leave empty)
+   - **Publish directory**: `frontend`
+   - **Functions directory**: `netlify/functions`
+
+#### 3. Set Environment Variables
+In Netlify dashboard:
+- Go to Site settings > Environment variables
+- Add: `OPENROUTER_API_KEY` = your OpenRouter API key
+- Add: `PYTHON_VERSION` = 3.9
+
+#### 4. Deploy
+- Click "Deploy site"
+- Wait for build to complete
+- Your site will be live at the provided URL
+
+### Local Testing with Netlify CLI (Optional)
+
+```bash
+# Install Netlify CLI
+npm install -g netlify-cli
+
+# Login
+netlify login
+
+# Set env vars locally
+netlify env:set OPENROUTER_API_KEY your-api-key-here
+
+# Test functions locally
+netlify dev
+```
+
+### Local Development (Original)
+
+#### Prerequisites
+- Python 3.9+
+- OpenRouter API key
+
+#### Setup
 ```bash
 git clone <your-repo-url>
 cd resume-assessment
+
+# Install dependencies
+pip install -r backend/requirements.txt
+
+# Set environment variable
+export OPENROUTER_API_KEY=your-api-key-here
+
+# Run the app
+python backend/main.py
 ```
+
+Open http://localhost:8000 in your browser.
 
 #### 2. Backend Setup
 ```bash

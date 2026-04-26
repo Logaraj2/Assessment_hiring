@@ -1,0 +1,12 @@
+[build]
+  publish = "frontend"
+  functions = "netlify/functions"
+
+[build.environment]
+  PYTHON_VERSION = "3.9"
+  OPENROUTER_API_KEY = "your-api-key-here"  # Replace with your actual key
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
