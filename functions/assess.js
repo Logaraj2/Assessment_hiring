@@ -64,6 +64,19 @@ async function callOpenRouterWithFallback(apiKey, messageContent, title) {
   return { failed: true, status: lastResponse?.status || 500, text: lastText };
 }
 
+function getRateLimitFallbackMessage(turnCount) {
+  const fallbackQuestions = [
+    "Let's continue while the AI service is busy. Can you describe one production system you built with Python and the biggest technical challenge you solved?",
+    "Good. How would you design a scalable REST API for this role, including authentication, validation, and error handling?",
+    "How do you optimize a React frontend for performance when the page has large datasets and multiple components updating frequently?",
+    "Explain one cloud architecture decision you made on AWS (or similar) and why you chose that approach over alternatives.",
+    "How do you ensure code quality in your team across testing, CI/CD, and code reviews?"
+  ];
+
+  const index = Math.max(0, Math.min(fallbackQuestions.length - 1, turnCount));
+  return fallbackQuestions[index];
+}
+
 exports.handler = async function(event, context) {
   // Handle CORS preflight
   if (event.httpMethod === 'OPTIONS') {
@@ -121,14 +134,20 @@ exports.handler = async function(event, context) {
     );
 
     if (response.failed && response.status === 429) {
-      const waitSeconds = 60;
+      const fallbackMessage = getRateLimitFallbackMessage(messages.length);
       return {
-        statusCode: 429,
+        statusCode: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Headers': 'Content-Type',
+          'Access-Control-Allow-Methods': 'POST, OPTIONS'
+        },
         body: JSON.stringify({
-          detail: {
-            message: `Rate limit exceeded (free API tier). Please wait ${waitSeconds} seconds.`,
-            retry_after_seconds: waitSeconds
-          }
+          message: `${fallbackMessage}\n\n(Note: AI provider is currently rate-limited, so this is a fallback interview prompt.)`,
+          is_complete: false,
+          assessment_data: null,
+          fallback_mode: true
         })
       };
     }

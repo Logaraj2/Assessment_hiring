@@ -114,13 +114,45 @@ Respond in JSON format with this structure:
     const response = await callOpenRouterWithFallback(apiKey, prompt);
 
     if (response.failed && response.status === 429) {
-      const waitSeconds = 10;
       return {
-        statusCode: 429,
+        statusCode: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Headers': 'Content-Type',
+          'Access-Control-Allow-Methods': 'POST, OPTIONS'
+        },
         body: JSON.stringify({
-          detail: {
-            message: `Rate limit exceeded (free API tier). Please wait ${waitSeconds} seconds.`,
-            retry_after_seconds: waitSeconds
+          learning_plan: {
+            learning_path: [
+              {
+                title: 'Phase 1: Backend Foundations',
+                duration_weeks: 4,
+                skills: ['Python API design', 'Data modeling', 'Validation and error handling'],
+                resources: [
+                  { title: 'FastAPI Official Docs', type: 'tutorial', estimated_hours: 8 },
+                  { title: 'Designing Data-Intensive Applications (selected chapters)', type: 'book', estimated_hours: 12 }
+                ],
+                project: 'Build a production-style CRUD API with auth, tests, and observability.'
+              },
+              {
+                title: 'Phase 2: Frontend and Integration',
+                duration_weeks: 4,
+                skills: ['React architecture', 'Performance optimization', 'API integration patterns'],
+                resources: [
+                  { title: 'React Docs (Performance + State Management)', type: 'tutorial', estimated_hours: 10 },
+                  { title: 'Web.dev Performance Guides', type: 'tutorial', estimated_hours: 6 }
+                ],
+                project: 'Create a dashboard app with caching, pagination, and robust error states.'
+              }
+            ],
+            total_duration_weeks: 8,
+            success_metrics: [
+              'Ship 2 portfolio projects with README and tests',
+              'Demonstrate measurable performance improvements',
+              'Pass mock technical interview rounds'
+            ],
+            fallback_mode: true
           }
         })
       };
