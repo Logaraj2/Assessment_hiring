@@ -1,5 +1,3 @@
-const fetch = require('node-fetch');
-
 // System prompt for assessment
 const ASSESSMENT_SYSTEM_PROMPT = `You are an expert technical interviewer conducting a skill assessment. Your task is to:
 
