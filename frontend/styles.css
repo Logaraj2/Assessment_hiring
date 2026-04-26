@@ -403,3 +403,21 @@ button {
     width: 80px;
     padding: 10px;
 }
+
+.rate-limit-banner {
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    border-left: 4px solid #ffc107;
+    color: #856404;
+    padding: 15px;
+    border-radius: 8px;
+    text-align: center;
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+.rate-limit-banner span {
+    font-size: 20px;
+    font-weight: 700;
+    color: #d63384;
+}

@@ -91,6 +91,42 @@
         let turnCount = 0;
         const MAX_TURNS = 5;
 
+        async function handleApiError(response) {
+            const data = await response.json();
+            if (response.status === 429) {
+                const detail = data.detail || {};
+                const waitSec = detail.retry_after_seconds || 60;
+                const msg = detail.message || 'Rate limit exceeded';
+                return { isRateLimit: true, waitSeconds: waitSec, message: msg };
+            }
+            throw new Error(data.detail?.message || data.detail || 'Request failed');
+        }
+
+        function showRateLimitCountdown(waitSeconds, onComplete) {
+            let remaining = waitSeconds;
+            const id = 'rateLimitTimer';
+            // Remove any existing timer
+            const existing = document.getElementById(id);
+            if (existing) existing.remove();
+
+            const timerDiv = document.createElement('div');
+            timerDiv.id = id;
+            timerDiv.className = 'chat-message chat-system';
+            timerDiv.innerHTML = `<strong>Rate limit hit (free API tier).</strong> Retrying in <span id="countdown">${remaining}</span>s...`;
+            document.getElementById('assessmentContent').appendChild(timerDiv);
+
+            const interval = setInterval(() => {
+                remaining--;
+                const countdownEl = document.getElementById('countdown');
+                if (countdownEl) countdownEl.textContent = remaining;
+                if (remaining <= 0) {
+                    clearInterval(interval);
+                    timerDiv.innerHTML = '<strong>Retrying now...</strong>';
+                    onComplete();
+                }
+            }, 1000);
+        }
+
         async function startAssessment() {
             jobDescription = document.getElementById('jobDesc').value.trim();
             resumeText = document.getElementById('resume').value.trim();
@@ -122,6 +158,14 @@
                         conversation_history: []
                     })
                 });
+
+                if (response.status === 429) {
+                    const err = await handleApiError(response);
+                    showLoading('assessment', false);
+                    document.getElementById('assessmentOutput').style.display = 'block';
+                    showRateLimitCountdown(err.waitSeconds, () => startAssessment());
+                    return;
+                }
 
                 if (!response.ok) {
                     const err = await response.json();
@@ -176,6 +220,24 @@
                         conversation_history: conversationHistory
                     })
                 });
+
+                if (response.status === 429) {
+                    const err = await handleApiError(response);
+                    showLoading('assessment', false);
+                    document.getElementById('sendBtn').disabled = false;
+                    // Re-add user message to input since it didn't go through
+                    document.getElementById('chatInput').value = userMessage;
+                    conversationHistory.pop(); // remove the user message we just added
+                    turnCount--;
+                    showRateLimitCountdown(err.waitSeconds, () => {
+                        document.getElementById('chatInput').value = '';
+                        conversationHistory.push({ role: 'user', content: userMessage });
+                        turnCount++;
+                        sendMessage.__retryMessage = userMessage;
+                        sendMessage();
+                    });
+                    return;
+                }
 
                 if (!response.ok) {
                     const err = await response.json();
@@ -307,6 +369,25 @@
                         candidate_name: 'Candidate'
                     })
                 });
+
+                if (response.status === 429) {
+                    const err = await handleApiError(response);
+                    showLoading('plan', false);
+                    const planContent = document.getElementById('planContent');
+                    planContent.innerHTML = `<div class="rate-limit-banner"><strong>Rate limit hit (free API tier).</strong> Retrying in <span id="planCountdown">${err.waitSeconds}</span>s...</div>`;
+                    document.getElementById('planOutput').style.display = 'block';
+                    let remaining = err.waitSeconds;
+                    const interval = setInterval(() => {
+                        remaining--;
+                        const el = document.getElementById('planCountdown');
+                        if (el) el.textContent = remaining;
+                        if (remaining <= 0) {
+                            clearInterval(interval);
+                            generateLearningPlan(assessmentResults);
+                        }
+                    }, 1000);
+                    return;
+                }
 
                 if (!response.ok) {
                     const err = await response.json();
