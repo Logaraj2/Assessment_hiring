@@ -1,12 +1,12 @@
 [build]
   publish = "."
-  functions = "netlify/functions"
+  functions = "functions"
 
 [build.environment]
   NODE_VERSION = "18"
 
 
 [dev]
-  functions = "netlify/functions"
+  functions = "functions"
   publish = "."
   port = 8888
