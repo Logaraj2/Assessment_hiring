@@ -8,7 +8,7 @@ An intelligent agent that assesses candidates' real proficiency against job requ
 
 ### Prerequisites
 - Python 3.9+
-- OpenRouter API key
+- OpenRouter API key (free models available - no payment needed)
 
 ### Setup Instructions
 
@@ -31,7 +31,7 @@ pip install -r requirements.txt
 
 # Setup environment
 cp ../.env.example .env
-# Edit .env and add your OPENROUTER_API_KEY
+# Edit .env and add your OPENROUTER_API_KEY (get from https://openrouter.ai/keys)
 ```
 
 #### 3. Start Backend Server
@@ -53,6 +53,7 @@ Frontend connects to backend at `http://localhost:8000/api`
 
 ## Features
 
+- **Resume Upload** - Upload PDF, DOCX, or TXT resume files for automatic text extraction
 - **Skill Extraction** - Automatically extracts required skills from job descriptions
 - **Conversational Assessment** - Multi-turn dialogue for realistic proficiency evaluation
 - **Gap Analysis** - Identifies skill gaps and proficiency levels
@@ -81,11 +82,13 @@ resume-assessment/
 │       │   ├── __init__.py
 │       │   ├── health.py           # GET /, GET /health
 │       │   ├── assessment.py       # POST /api/assess, /api/quick-assessment
-│       │   └── plan.py             # POST /api/generate-plan
+│       │   ├── plan.py             # POST /api/generate-plan
+│       │   └── upload.py           # POST /api/upload-resume
 │       └── services/
 │           ├── __init__.py
 │           ├── assessment.py       # Assessment business logic
-│           └── plan.py             # Learning plan generation logic
+│           ├── plan.py             # Learning plan generation logic
+│           └── file_parser.py      # Resume file parsing (PDF, DOCX, TXT)
 └── frontend/
     ├── index.html                  # Web UI (HTML + JavaScript)
     └── styles.css                  # Stylesheet
@@ -103,27 +106,39 @@ FastAPI Backend
     ├── app/__init__.py         App factory, CORS, router registration
     ├── app/routers/            Route definitions (thin controllers)
     ├── app/services/           Business logic (AI orchestration)
-    ├── app/ai_client.py        OpenRouter HTTP calls + JSON parsing
+    ├── app/ai_client.py        OpenRouter API calls + JSON parsing
     ├── app/schemas.py          Request/response models
     ├── app/prompts.py          System prompt constants
     └── app/config.py           Settings from environment variables
     │
     ▼
-OpenRouter API → Claude Sonnet 4
+OpenRouter API → Free AI Models (Google Gemma, Meta Llama, etc.)
 ```
 
 ### Data Flow
 
-1. **Input**: Job description + Candidate resume
+1. **Input**: Job description + Candidate resume (paste or upload PDF/DOCX/TXT)
 2. **Skill Extraction**: Parse JD to identify required skills
 3. **Assessment**:
-   - Claude asks targeted questions
+   - AI asks targeted questions
    - Evaluates proficiency (beginner → expert)
    - Tracks confidence scores
 4. **Gap Analysis**: Compare candidate proficiency vs. requirements
 5. **Learning Plan**: Generate phase-based roadmap with adjacent skill recommendations, curated resources, time estimates, and success metrics
 
 ## API Endpoints
+
+### POST `/api/upload-resume`
+Upload a resume file (PDF, DOCX, TXT) and extract text.
+
+**Request:** `multipart/form-data` with `file` field
+
+**Response:**
+```json
+{
+  "text": "Extracted resume text..."
+}
+```
 
 ### POST `/api/quick-assessment`
 End-to-end assessment without conversation.
@@ -223,6 +238,19 @@ Generate learning plan from assessment results.
 - Medium (0.5-0.8): Some evidence, needs verification
 - Low (<0.5): Unclear or contradictory signals
 
+## Free AI Models
+
+The app uses OpenRouter with free AI models (no payment required):
+
+| Model | ID |
+|---|---|
+| Google Gemma 3 12B | `google/gemma-3-12b-it:free` |
+| Google Gemma 3 27B | `google/gemma-3-27b-it:free` |
+| Meta Llama 3.3 70B | `meta-llama/llama-3.3-70b-instruct:free` |
+| Qwen 3 Coder | `qwen/qwen3-coder:free` |
+
+Change the model in `.env` by updating `AI_MODEL`.
+
 ## Deployment
 
 ### Local Deployment
@@ -244,14 +272,16 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
 
 Create `.env` in backend directory:
 ```
-OPENROUTER_API_KEY=your_openrouter_api_key_here
-AI_MODEL=anthropic/claude-sonnet-4
+OPENROUTER_API_KEY=your-openrouter-api-key-here
+AI_MODEL=google/gemma-3-12b-it:free
 ```
+
+Get your API key from [openrouter.ai/keys](https://openrouter.ai/keys)
 
 ## Technologies
 
 - **Backend**: Python, FastAPI, Uvicorn, Pydantic
-- **AI**: Claude Sonnet 4 via OpenRouter
+- **AI**: Free models via OpenRouter (Google Gemma, Meta Llama)
 - **Frontend**: HTML5, CSS3, Vanilla JavaScript
 - **API**: RESTful with JSON
 
@@ -269,6 +299,10 @@ AI_MODEL=anthropic/claude-sonnet-4
 - Check Python version: `python --version` (need 3.9+)
 - Check API key in `.env`: `OPENROUTER_API_KEY=...`
 - Check port 8000 is free
+
+**Getting 429 rate limit errors?**
+- Free models have rate limits — wait a minute and retry
+- Try switching to a different free model in `.env`
 
 **Frontend can't connect to backend?**
 - Ensure backend is running on `http://localhost:8000`

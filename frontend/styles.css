@@ -146,6 +146,9 @@ button {
     padding: 20px;
     max-height: 600px;
     overflow-y: auto;
+    overflow-x: hidden;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 
 .output-box h3 {
@@ -162,6 +165,9 @@ button {
     margin-bottom: 15px;
     line-height: 1.6;
     color: #333;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    white-space: pre-wrap;
 }
 
 .learning-plan {
@@ -288,6 +294,9 @@ button {
     overflow-x: auto;
     margin: 10px 0;
     border-left: 4px solid #667eea;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 
 .footer {
@@ -322,4 +331,75 @@ button {
     font-size: 12px;
     padding: 4px 10px;
     border-radius: 4px;
+}
+
+/* Chat messages */
+.chat-message {
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    line-height: 1.6;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+
+.chat-assistant {
+    background: white;
+    border-left: 4px solid #667eea;
+    color: #333;
+}
+
+.chat-user {
+    background: #eef2ff;
+    border-left: 4px solid #764ba2;
+    color: #333;
+}
+
+.chat-system {
+    background: #fff3cd;
+    border-left: 4px solid #ffc107;
+    color: #856404;
+    font-size: 13px;
+}
+
+.chat-role {
+    font-weight: 700;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+    color: #667eea;
+}
+
+.chat-user .chat-role {
+    color: #764ba2;
+}
+
+.chat-input-group {
+    display: flex;
+    gap: 10px;
+    margin-top: 15px;
+    align-items: flex-end;
+}
+
+.chat-input-group textarea {
+    flex: 1;
+    padding: 10px;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-size: 14px;
+    resize: none;
+    transition: border-color 0.3s;
+}
+
+.chat-input-group textarea:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+.chat-input-group button {
+    flex: none;
+    width: 80px;
+    padding: 10px;
 }

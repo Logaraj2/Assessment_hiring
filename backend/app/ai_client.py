@@ -15,9 +15,16 @@ def call_ai(messages: list, system: str = None, max_tokens: int = 2000) -> str:
     }
 
     formatted_messages = []
-    if system:
-        formatted_messages.append({"role": "system", "content": system})
-    formatted_messages.extend(messages)
+    for msg in messages:
+        formatted_messages.append(dict(msg))
+
+    # Prepend system prompt to the first user message since some models
+    # (e.g. Gemma) don't support the system role
+    if system and formatted_messages:
+        for msg in formatted_messages:
+            if msg["role"] == "user":
+                msg["content"] = f"[Instructions: {system}]\n\n{msg['content']}"
+                break
 
     payload = {
         "model": settings.ai_model,

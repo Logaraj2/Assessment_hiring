@@ -32,7 +32,7 @@
             </div>
 
             <div class="button-group">
-                <button class="btn-primary" onclick="startAssessment()">Start Assessment</button>
+                <button class="btn-primary" id="startBtn" onclick="startAssessment()">Start Assessment</button>
                 <button class="btn-secondary" onclick="loadSample()">Load Sample</button>
             </div>
         </div>
@@ -49,8 +49,19 @@
                     <p style="margin-top: 15px; color: #667eea;">Analyzing skills...</p>
                 </div>
                 <div class="output-box" id="assessmentOutput" style="display: none;">
-                    <h3>💬 Assessment Results</h3>
+                    <h3>💬 Assessment Chat</h3>
                     <div id="assessmentContent"></div>
+                    <div id="chatInputArea" style="display: none;">
+                        <div class="chat-input-group">
+                            <textarea id="chatInput" placeholder="Type your answer..." rows="3"></textarea>
+                            <button class="btn-primary" id="sendBtn" onclick="sendMessage()">Send</button>
+                        </div>
+                    </div>
+                    <div id="assessmentComplete" style="display: none;">
+                        <div class="status-message status-success">
+                            Assessment complete! Switch to the <strong>Learning Plan</strong> tab to see your personalized roadmap.
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -67,88 +78,245 @@
         </div>
 
         <div class="footer">
-            <p>Powered by Claude AI | Deccan AI Catalyst Hackathon 2026</p>
+            <p>Powered by AI | Deccan AI Catalyst Hackathon 2026</p>
         </div>
     </div>
 
     <script>
         const API_BASE = 'http://localhost:8000/api';
+        let conversationHistory = [];
+        let jobDescription = '';
+        let resumeText = '';
+        let assessmentData = null;
+        let turnCount = 0;
+        const MAX_TURNS = 5;
 
         async function startAssessment() {
-            const jobDesc = document.getElementById('jobDesc').value.trim();
-            const resume = document.getElementById('resume').value.trim();
+            jobDescription = document.getElementById('jobDesc').value.trim();
+            resumeText = document.getElementById('resume').value.trim();
 
-            if (!jobDesc || !resume) {
+            if (!jobDescription || !resumeText) {
                 alert('Please provide both job description and resume');
                 return;
             }
 
+            // Reset state
+            conversationHistory = [];
+            assessmentData = null;
+            turnCount = 0;
+            document.getElementById('assessmentContent').innerHTML = '';
+            document.getElementById('assessmentComplete').style.display = 'none';
+            document.getElementById('planOutput').style.display = 'none';
+            document.getElementById('startBtn').disabled = true;
+
             showLoading('assessment', true);
+            document.getElementById('assessmentOutput').style.display = 'block';
+
+            try {
+                const response = await fetch(`${API_BASE}/assess`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        job_description: jobDescription,
+                        resume: resumeText,
+                        conversation_history: []
+                    })
+                });
+
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.detail || 'Assessment failed');
+                }
+
+                const data = await response.json();
+                showLoading('assessment', false);
+                appendMessage('assistant', data.message);
+                turnCount++;
+
+                if (data.is_complete && data.assessment_data) {
+                    finishAssessment(data.assessment_data);
+                } else {
+                    // Build the initial context message the same way the backend does
+                    // so follow-up calls have the full history
+                    conversationHistory.push({
+                        role: 'user',
+                        content: `CANDIDATE RESUME:\n${resumeText}\n\nPlease assess the candidate's proficiency in the required skills based on their resume.\nAsk targeted questions to verify their real proficiency level.\n\nStart the skill assessment by introducing yourself and explaining the process. Then ask about the first relevant skill.`
+                    });
+                    conversationHistory.push({ role: 'assistant', content: data.message });
+                    document.getElementById('chatInputArea').style.display = 'block';
+                    document.getElementById('chatInput').focus();
+                }
+            } catch (error) {
+                showLoading('assessment', false);
+                showError('assessment', error.message);
+                document.getElementById('startBtn').disabled = false;
+            }
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('chatInput');
+            const userMessage = input.value.trim();
+            if (!userMessage) return;
+
+            input.value = '';
+            appendMessage('user', userMessage);
+            conversationHistory.push({ role: 'user', content: userMessage });
+            turnCount++;
+
+            document.getElementById('sendBtn').disabled = true;
+            showLoading('assessment', true);
+
+            try {
+                const response = await fetch(`${API_BASE}/assess`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        job_description: jobDescription,
+                        resume: resumeText,
+                        conversation_history: conversationHistory
+                    })
+                });
+
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.detail || 'Assessment failed');
+                }
+
+                const data = await response.json();
+                showLoading('assessment', false);
+                document.getElementById('sendBtn').disabled = false;
+                appendMessage('assistant', data.message);
+                conversationHistory.push({ role: 'assistant', content: data.message });
+                turnCount++;
+
+                if (data.is_complete && data.assessment_data) {
+                    finishAssessment(data.assessment_data);
+                } else if (turnCount >= MAX_TURNS * 2) {
+                    // Auto-finish after max turns with a quick assessment
+                    autoFinishAssessment();
+                } else {
+                    document.getElementById('chatInput').focus();
+                }
+            } catch (error) {
+                showLoading('assessment', false);
+                document.getElementById('sendBtn').disabled = false;
+                appendMessage('system', `Error: ${error.message}`);
+            }
+        }
+
+        async function autoFinishAssessment() {
+            appendMessage('system', 'Wrapping up assessment and generating results...');
+            document.getElementById('chatInputArea').style.display = 'none';
+            showLoading('assessment', true);
+
             try {
                 const response = await fetch(`${API_BASE}/quick-assessment`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ job_description: jobDesc, resume: resume })
+                    body: JSON.stringify({
+                        job_description: jobDescription,
+                        resume: resumeText
+                    })
                 });
 
                 const data = await response.json();
-                displayAssessment(data);
-                generateLearningPlan(data);
+                showLoading('assessment', false);
+                finishAssessment(data);
             } catch (error) {
-                showError('Assessment', error.message);
+                showLoading('assessment', false);
+                showError('assessment', error.message);
             }
         }
 
-        function displayAssessment(data) {
-            const content = document.getElementById('assessmentContent');
-            let html = '';
+        function finishAssessment(data) {
+            assessmentData = data;
+            document.getElementById('chatInputArea').style.display = 'none';
+            document.getElementById('startBtn').disabled = false;
 
-            if (data.skills_assessed) {
-                html += '<h4>Skills Assessment</h4>';
-                data.skills_assessed.forEach(skill => {
+            // Show assessment summary
+            let html = '<h4 style="margin-top:20px">📊 Assessment Summary</h4>';
+            const skills = data.skills_assessed || [];
+            if (Array.isArray(skills) && skills.length > 0) {
+                skills.forEach(skill => {
+                    const level = skill.proficiency_level || skill.candidate_proficiency || 'N/A';
+                    const evidence = skill.evidence || skill.justification || '';
+                    const gap = skill.gap_analysis || '';
                     html += `
                         <div class="assessment-message">
                             <strong>${skill.skill}</strong><br>
-                            Level: <span class="skill-tag">${skill.proficiency_level}</span><br>
-                            Evidence: ${skill.evidence}<br>
-                            Gap Analysis: ${skill.gap_analysis}
+                            Level: <span class="skill-tag">${level}</span><br>
+                            ${evidence ? `Evidence: ${evidence}<br>` : ''}
+                            ${gap ? `Gap: ${gap}` : ''}
                         </div>
                     `;
                 });
-
-                if (data.recommended_focus_areas) {
-                    html += '<h4>Focus Areas</h4>';
-                    data.recommended_focus_areas.forEach(area => {
-                        html += `<div class="skill-tag">${area}</div>`;
-                    });
-                }
-            } else if (data.assessment) {
-                html = `<div class="assessment-message">${formatText(data.assessment)}</div>`;
-            } else {
-                html = `<pre class="code-block">${JSON.stringify(data, null, 2)}</pre>`;
             }
 
-            content.innerHTML = html;
-            showLoading('assessment', false);
-            document.getElementById('assessmentOutput').style.display = 'block';
+            const focusAreas = data.recommended_focus_areas || [];
+            if (Array.isArray(focusAreas) && focusAreas.length > 0) {
+                html += '<h4>Focus Areas</h4>';
+                focusAreas.forEach(area => {
+                    html += `<div class="skill-tag">${area}</div>`;
+                });
+            }
+
+            const adjacent = data.adjacent_skills || [];
+            if (Array.isArray(adjacent) && adjacent.length > 0) {
+                html += '<h4 style="margin-top:15px">Adjacent Skills</h4>';
+                adjacent.forEach(skill => {
+                    html += `<div class="skill-tag" style="background:#764ba2">${skill}</div>`;
+                });
+            }
+
+            document.getElementById('assessmentContent').innerHTML += html;
+            document.getElementById('assessmentComplete').style.display = 'block';
+
+            // Auto-generate learning plan
+            generateLearningPlan(data);
         }
 
-        async function generateLearningPlan(assessmentData) {
+        function appendMessage(role, text) {
+            const content = document.getElementById('assessmentContent');
+            const div = document.createElement('div');
+
+            if (role === 'assistant') {
+                div.className = 'chat-message chat-assistant';
+                div.innerHTML = `<div class="chat-role">🤖 Interviewer</div><div>${formatText(text)}</div>`;
+            } else if (role === 'user') {
+                div.className = 'chat-message chat-user';
+                div.innerHTML = `<div class="chat-role">👤 You</div><div>${formatText(text)}</div>`;
+            } else {
+                div.className = 'chat-message chat-system';
+                div.innerHTML = `<div>${formatText(text)}</div>`;
+            }
+
+            content.appendChild(div);
+            // Scroll to bottom
+            const outputBox = document.getElementById('assessmentOutput');
+            outputBox.scrollTop = outputBox.scrollHeight;
+        }
+
+        async function generateLearningPlan(assessmentResults) {
             showLoading('plan', true);
             try {
                 const response = await fetch(`${API_BASE}/generate-plan`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        assessment_results: assessmentData,
+                        assessment_results: assessmentResults,
                         candidate_name: 'Candidate'
                     })
                 });
 
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.detail || 'Plan generation failed');
+                }
+
                 const data = await response.json();
                 displayLearningPlan(data);
             } catch (error) {
-                showError('Learning Plan', error.message);
+                showError('plan', error.message);
             }
         }
 
@@ -156,33 +324,44 @@
             const content = document.getElementById('planContent');
             let html = '';
 
-            if (data.learning_plan.learning_path) {
-                data.learning_plan.learning_path.forEach((phase, idx) => {
+            const plan = data.learning_plan || data;
+
+            if (plan.learning_path && Array.isArray(plan.learning_path)) {
+                plan.learning_path.forEach((phase, idx) => {
+                    const skills = Array.isArray(phase.skills) ? phase.skills : [];
+                    const resources = Array.isArray(phase.resources) ? phase.resources : [];
                     html += `
                         <div class="learning-plan">
-                            <h4>Phase ${idx + 1}: ${phase.title}</h4>
-                            <p><strong>Duration:</strong> ${phase.duration_weeks} weeks</p>
-                            <p><strong>Skills:</strong></p>
-                            <div>${phase.skills.map(s => `<span class="skill-tag">${s}</span>`).join('')}</div>
-                            <p style="margin-top: 10px;"><strong>Resources:</strong></p>
+                            <h4>Phase ${idx + 1}: ${phase.title || 'Phase ' + (idx+1)}</h4>
+                            <p><strong>Duration:</strong> ${phase.duration_weeks || '?'} weeks</p>
+                            ${skills.length ? `<p><strong>Skills:</strong></p>
+                            <div>${skills.map(s => `<span class="skill-tag">${s}</span>`).join('')}</div>` : ''}
+                            ${resources.length ? `<p style="margin-top: 10px;"><strong>Resources:</strong></p>
                             <ul>
-                                ${phase.resources.map(r => `
-                                    <li>${r.title} (${r.type}) - ${r.estimated_hours}h</li>
+                                ${resources.map(r => `
+                                    <li>${r.title || r.name || 'Resource'} (${r.type || 'resource'})${r.estimated_hours ? ' - ' + r.estimated_hours + 'h' : ''}</li>
                                 `).join('')}
-                            </ul>
-                            <p style="margin-top: 10px;"><strong>Project:</strong> ${phase.project}</p>
+                            </ul>` : ''}
+                            ${phase.project ? `<p style="margin-top: 10px;"><strong>Project:</strong> ${phase.project}</p>` : ''}
                         </div>
                     `;
                 });
 
-                html += `<div class="learning-plan" style="margin-top: 20px;">
-                    <h4>Total Duration</h4>
-                    <p>${data.learning_plan.total_duration_weeks} weeks</p>
-                    <h4>Success Metrics</h4>
-                    <ul>${data.learning_plan.success_metrics.map(m => `<li>${m}</li>`).join('')}</ul>
-                </div>`;
+                if (plan.total_duration_weeks || plan.success_metrics) {
+                    html += `<div class="learning-plan" style="margin-top: 20px;">`;
+                    if (plan.total_duration_weeks) {
+                        html += `<h4>Total Duration</h4><p>${plan.total_duration_weeks} weeks</p>`;
+                    }
+                    if (plan.success_metrics && Array.isArray(plan.success_metrics)) {
+                        html += `<h4>Success Metrics</h4>
+                        <ul>${plan.success_metrics.map(m => `<li>${m}</li>`).join('')}</ul>`;
+                    }
+                    html += `</div>`;
+                }
+            } else if (plan.raw_plan) {
+                html = `<div class="assessment-message">${formatText(plan.raw_plan)}</div>`;
             } else {
-                html = `<pre class="code-block">${JSON.stringify(data, null, 2)}</pre>`;
+                html = `<div class="assessment-message">${formatText(JSON.stringify(plan, null, 2))}</div>`;
             }
 
             content.innerHTML = html;
@@ -202,15 +381,28 @@
         }
 
         function showError(section, message) {
-            const content = document.getElementById(`${section.toLowerCase()}Content`);
-            content.innerHTML = `<div class="status-message status-error">Error: ${message}</div>`;
-            showLoading(section.toLowerCase(), false);
-            document.getElementById(`${section.toLowerCase()}Output`).style.display = 'block';
+            showLoading(section, false);
+            if (section === 'assessment') {
+                appendMessage('system', `Error: ${message}`);
+                document.getElementById('assessmentOutput').style.display = 'block';
+            } else {
+                const content = document.getElementById(`${section}Content`);
+                content.innerHTML = `<div class="status-message status-error">Error: ${message}</div>`;
+                document.getElementById(`${section}Output`).style.display = 'block';
+            }
         }
 
         function formatText(text) {
             return text.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
         }
+
+        // Allow Enter to send in chat
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey && document.activeElement.id === 'chatInput') {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
 
         async function handleFileUpload(event) {
             const file = event.target.files[0];
