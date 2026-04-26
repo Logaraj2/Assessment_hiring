@@ -90,7 +90,7 @@
     </div>
 
     <script>
-        const API_BASE = '/api';
+        const API_BASE = '/.netlify/functions';
         let conversationHistory = [];
         let jobDescription = '';
         let resumeText = '';
@@ -102,8 +102,17 @@
         let planRetryInterval = null;
         let cameraStream = null;
 
+        async function getResponseBody(response) {
+            const text = await response.text();
+            try {
+                return JSON.parse(text);
+            } catch (error) {
+                throw new Error(`Invalid JSON response (${response.status}): ${text}`);
+            }
+        }
+
         async function handleApiError(response) {
-            const data = await response.json();
+            const data = await getResponseBody(response);
             if (response.status === 429) {
                 const detail = data.detail || {};
                 const waitSec = detail.retry_after_seconds || 60;
@@ -182,11 +191,11 @@
                 }
 
                 if (!response.ok) {
-                    const err = await response.json();
-                    throw new Error(err.detail || 'Assessment failed');
+                    const err = await getResponseBody(response);
+                    throw new Error(err.detail || `Assessment failed (${response.status})`);
                 }
 
-                const data = await response.json();
+                const data = await getResponseBody(response);
                 showLoading('assessment', false);
                 appendMessage('assistant', data.message);
                 turnCount++;
@@ -257,11 +266,11 @@
                 }
 
                 if (!response.ok) {
-                    const err = await response.json();
-                    throw new Error(err.detail || 'Assessment failed');
+                    const err = await getResponseBody(response);
+                    throw new Error(err.detail || `Assessment failed (${response.status})`);
                 }
 
-                const data = await response.json();
+                const data = await getResponseBody(response);
                 showLoading('assessment', false);
                 document.getElementById('sendBtn').disabled = false;
                 appendMessage('assistant', data.message);
@@ -298,7 +307,7 @@
                     })
                 });
 
-                const data = await response.json();
+                const data = await getResponseBody(response);
                 showLoading('assessment', false);
                 finishAssessment(data);
             } catch (error) {
@@ -428,12 +437,12 @@
                 }
 
                 if (!response.ok) {
-                    const err = await response.json();
-                    const msg = typeof err.detail === 'object' ? err.detail.message : (err.detail || 'Plan generation failed');
+                    const err = await getResponseBody(response);
+                    const msg = typeof err.detail === 'object' ? err.detail.message : (err.detail || `Plan generation failed (${response.status})`);
                     throw new Error(msg);
                 }
 
-                const data = await response.json();
+                const data = await getResponseBody(response);
                 planNeedsRetry = false;
                 pendingPlanData = null;
                 displayLearningPlan(data);
@@ -599,11 +608,11 @@
                 });
 
                 if (!response.ok) {
-                    const err = await response.json();
-                    throw new Error(err.detail || 'Upload failed');
+                    const err = await getResponseBody(response);
+                    throw new Error(err.detail || `Upload failed (${response.status})`);
                 }
 
-                const data = await response.json();
+                const data = await getResponseBody(response);
                 document.getElementById('resume').value = data.text;
                 status.textContent = `Loaded: ${file.name}`;
                 status.className = 'upload-status status-success';

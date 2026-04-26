@@ -64,3 +64,6 @@ uploads/
 assessments/
 logs/
 *.log
+
+# Local Netlify folder
+.netlify

@@ -1,0 +1,16 @@
+{
+  "name": "resume-assessment-functions",
+  "version": "1.0.0",
+  "description": "Netlify functions for resume assessment API",
+  "main": "api/assess.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "node-fetch": "^2.6.7",
+    "form-data": "^4.0.0"
+  },
+  "keywords": ["netlify", "functions", "api"],
+  "author": "",
+  "license": "ISC"
+}
