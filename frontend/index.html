@@ -90,6 +90,9 @@
         let assessmentData = null;
         let turnCount = 0;
         const MAX_TURNS = 5;
+        let planNeedsRetry = false;
+        let pendingPlanData = null;
+        let planRetryInterval = null;
 
         async function handleApiError(response) {
             const data = await response.json();
@@ -360,6 +363,7 @@
 
         async function generateLearningPlan(assessmentResults) {
             showLoading('plan', true);
+            document.getElementById('planOutput').style.display = 'block';
             try {
                 const response = await fetch(`${API_BASE}/generate-plan`, {
                     method: 'POST',
@@ -371,18 +375,35 @@
                 });
 
                 if (response.status === 429) {
-                    const err = await handleApiError(response);
+                    let waitSeconds = 10;
+                    try {
+                        const errData = await response.json();
+                        const detail = errData.detail || {};
+                        if (typeof detail === 'object' && detail.retry_after_seconds) {
+                            waitSeconds = detail.retry_after_seconds;
+                        }
+                    } catch (e) {}
+
                     showLoading('plan', false);
+                    planNeedsRetry = true;
+                    pendingPlanData = assessmentResults;
                     const planContent = document.getElementById('planContent');
-                    planContent.innerHTML = `<div class="rate-limit-banner"><strong>Rate limit hit (free API tier).</strong> Retrying in <span id="planCountdown">${err.waitSeconds}</span>s...</div>`;
-                    document.getElementById('planOutput').style.display = 'block';
-                    let remaining = err.waitSeconds;
-                    const interval = setInterval(() => {
+                    let remaining = waitSeconds;
+                    planContent.innerHTML = `<div class="rate-limit-banner">
+                        <strong>⏳ Rate limit hit (free API tier)</strong><br>
+                        Auto-retrying in <span id="planCountdown">${remaining}</span> seconds...<br>
+                        <small>Or switch tabs and come back to retry manually.</small>
+                    </div>`;
+
+                    if (planRetryInterval) clearInterval(planRetryInterval);
+                    planRetryInterval = setInterval(() => {
                         remaining--;
                         const el = document.getElementById('planCountdown');
                         if (el) el.textContent = remaining;
                         if (remaining <= 0) {
-                            clearInterval(interval);
+                            clearInterval(planRetryInterval);
+                            planRetryInterval = null;
+                            planNeedsRetry = false;
                             generateLearningPlan(assessmentResults);
                         }
                     }, 1000);
@@ -391,12 +412,16 @@
 
                 if (!response.ok) {
                     const err = await response.json();
-                    throw new Error(err.detail || 'Plan generation failed');
+                    const msg = typeof err.detail === 'object' ? err.detail.message : (err.detail || 'Plan generation failed');
+                    throw new Error(msg);
                 }
 
                 const data = await response.json();
+                planNeedsRetry = false;
+                pendingPlanData = null;
                 displayLearningPlan(data);
             } catch (error) {
+                showLoading('plan', false);
                 showError('plan', error.message);
             }
         }
@@ -455,6 +480,16 @@
             document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
             document.getElementById(tab).classList.add('active');
             event.target.classList.add('active');
+
+            // Retry plan generation when switching to plan tab
+            if (tab === 'plan' && planNeedsRetry && pendingPlanData) {
+                if (planRetryInterval) {
+                    clearInterval(planRetryInterval);
+                    planRetryInterval = null;
+                }
+                planNeedsRetry = false;
+                generateLearningPlan(pendingPlanData);
+            }
         }
 
         function showLoading(section, show) {
@@ -463,12 +498,13 @@
 
         function showError(section, message) {
             showLoading(section, false);
+            const errorMsg = typeof message === 'object' ? (message.message || JSON.stringify(message)) : message;
             if (section === 'assessment') {
-                appendMessage('system', `Error: ${message}`);
+                appendMessage('system', `Error: ${errorMsg}`);
                 document.getElementById('assessmentOutput').style.display = 'block';
             } else {
                 const content = document.getElementById(`${section}Content`);
-                content.innerHTML = `<div class="status-message status-error">Error: ${message}</div>`;
+                content.innerHTML = `<div class="status-message status-error">Error: ${errorMsg}</div>`;
                 document.getElementById(`${section}Output`).style.display = 'block';
             }
         }
