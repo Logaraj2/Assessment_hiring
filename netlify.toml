@@ -1,12 +1,12 @@
 [build]
   publish = "frontend"
-  functions = "netlify/functions"
+  functions = "frontend/functions"
 
 [build.environment]
-  PYTHON_VERSION = "3.9"
-  OPENROUTER_API_KEY = "your-api-key-here"  # Replace with your actual key
+  NODE_VERSION = "18"
 
-[[redirects]]
-  from = "/api/*"
-  to = "/.netlify/functions/:splat"
-  status = 200
+
+[dev]
+  functions = "frontend/functions"
+  publish = "frontend"
+  port = 8888
