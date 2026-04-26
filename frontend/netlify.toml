@@ -5,25 +5,6 @@
 [build.environment]
   NODE_VERSION = "18"
 
-[[redirects]]
-  from = "/api/assess"
-  to = "/.netlify/functions/assess"
-  status = 200
-
-[[redirects]]
-  from = "/api/quick-assess"
-  to = "/.netlify/functions/quick-assessment"
-  status = 200
-
-[[redirects]]
-  from = "/api/generate-plan"
-  to = "/.netlify/functions/generate-plan"
-  status = 200
-
-[[redirects]]
-  from = "/api/upload-resume"
-  to = "/.netlify/functions/upload-resume"
-  status = 200
 
 [dev]
   functions = "netlify/functions"
