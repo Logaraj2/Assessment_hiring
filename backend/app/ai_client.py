@@ -37,27 +37,47 @@ def call_ai(messages: list, system: str = None, max_tokens: int = 2000) -> str:
         response = client.post(settings.openrouter_base_url, headers=headers, json=payload)
 
         if response.status_code == 429:
-            # Parse retry-after from header or response body
+            wait_seconds = 10  # conservative default
+            # Check standard headers
             retry_after = response.headers.get("retry-after", "")
-            wait_seconds = 60  # default
+            ratelimit_reset = response.headers.get("x-ratelimit-reset-requests", "") or response.headers.get("x-ratelimit-reset", "")
+
             if retry_after.isdigit():
                 wait_seconds = int(retry_after)
+            elif ratelimit_reset:
+                # Could be seconds or a timestamp
+                if ratelimit_reset.replace(".", "").isdigit():
+                    wait_seconds = max(1, int(float(ratelimit_reset)))
             else:
-                # Try to parse from response body
+                # Parse from error body
                 try:
                     err_body = response.json()
-                    err_msg = err_body.get("error", {}).get("message", "")
-                    # Look for patterns like "try again in 58s" or "60 seconds"
-                    match = re.search(r'(\d+)\s*s(?:ec|econds?)?', err_msg, re.IGNORECASE)
+                    err_msg = str(err_body.get("error", {}).get("message", ""))
+                    # Match patterns like "try again in 58s", "wait 120 seconds", "10s"
+                    match = re.search(r'(\d+)\s*s(?:ec(?:ond)?s?)?', err_msg, re.IGNORECASE)
                     if match:
                         wait_seconds = int(match.group(1))
+                    # Match "try again in X.Xs"
+                    match2 = re.search(r'(\d+\.?\d*)\s*s(?:ec)?', err_msg, re.IGNORECASE)
+                    if match2:
+                        wait_seconds = max(1, int(float(match2.group(1))))
                 except Exception:
                     pass
+
+            # Log headers for debugging
+            print(f"[429] Rate limited. Headers: retry-after={retry_after}, "
+                  f"x-ratelimit-reset-requests={response.headers.get('x-ratelimit-reset-requests', '')}, "
+                  f"x-ratelimit-reset={response.headers.get('x-ratelimit-reset', '')}. "
+                  f"Wait: {wait_seconds}s")
+            try:
+                print(f"[429] Body: {response.text[:500]}")
+            except Exception:
+                pass
 
             raise HTTPException(
                 status_code=429,
                 detail={
-                    "message": "Rate limit exceeded. Free API tier has request limits.",
+                    "message": f"Rate limit exceeded (free API tier). Please wait {wait_seconds} seconds.",
                     "retry_after_seconds": wait_seconds
                 }
             )
