@@ -4,309 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Skill Assessment & Learning Plan Agent</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-        }
-
-        .container {
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            max-width: 1200px;
-            width: 100%;
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 30px;
-            padding: 40px;
-        }
-
-        @media (max-width: 768px) {
-            .container {
-                grid-template-columns: 1fr;
-                padding: 20px;
-            }
-        }
-
-        .header {
-            grid-column: 1 / -1;
-            text-align: center;
-            margin-bottom: 20px;
-            border-bottom: 3px solid #667eea;
-            padding-bottom: 20px;
-        }
-
-        .header h1 {
-            color: #333;
-            margin-bottom: 8px;
-            font-size: 32px;
-        }
-
-        .header p {
-            color: #666;
-            font-size: 14px;
-        }
-
-        .input-section {
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
-
-        .form-group {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .form-group label {
-            font-weight: 600;
-            color: #333;
-            font-size: 14px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .form-group textarea {
-            padding: 12px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            font-size: 14px;
-            resize: vertical;
-            min-height: 150px;
-            transition: border-color 0.3s;
-        }
-
-        .form-group textarea:focus {
-            outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-        }
-
-        .button-group {
-            display: flex;
-            gap: 10px;
-            margin-top: 20px;
-        }
-
-        button {
-            flex: 1;
-            padding: 12px 24px;
-            border: none;
-            border-radius: 8px;
-            font-weight: 600;
-            font-size: 14px;
-            cursor: pointer;
-            transition: all 0.3s;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }
-
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
-        }
-
-        .btn-primary:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        .btn-secondary {
-            background: #f0f0f0;
-            color: #333;
-        }
-
-        .btn-secondary:hover {
-            background: #e0e0e0;
-        }
-
-        .output-section {
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
-
-        .output-box {
-            background: #f9f9f9;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            padding: 20px;
-            max-height: 600px;
-            overflow-y: auto;
-        }
-
-        .output-box h3 {
-            color: #667eea;
-            margin-bottom: 15px;
-            font-size: 16px;
-        }
-
-        .assessment-message {
-            background: white;
-            padding: 15px;
-            border-left: 4px solid #667eea;
-            border-radius: 4px;
-            margin-bottom: 15px;
-            line-height: 1.6;
-            color: #333;
-        }
-
-        .learning-plan {
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            border: 2px solid #f0f0f0;
-        }
-
-        .learning-plan h4 {
-            color: #667eea;
-            margin-top: 15px;
-            margin-bottom: 10px;
-            font-size: 14px;
-        }
-
-        .learning-plan ul {
-            margin-left: 20px;
-            color: #666;
-            line-height: 1.8;
-            font-size: 14px;
-        }
-
-        .learning-plan li {
-            margin-bottom: 8px;
-        }
-
-        .skill-tag {
-            display: inline-block;
-            background: #667eea;
-            color: white;
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            margin: 4px 4px 4px 0;
-            font-weight: 600;
-        }
-
-        .loading {
-            display: none;
-            text-align: center;
-            padding: 20px;
-        }
-
-        .spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #667eea;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        .status-message {
-            padding: 12px;
-            border-radius: 8px;
-            margin-bottom: 15px;
-            font-size: 14px;
-            font-weight: 600;
-        }
-
-        .status-success {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-
-        .status-error {
-            background: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
-
-        .status-info {
-            background: #d1ecf1;
-            color: #0c5460;
-            border: 1px solid #bee5eb;
-        }
-
-        .tab-buttons {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 15px;
-            border-bottom: 2px solid #e0e0e0;
-        }
-
-        .tab-btn {
-            padding: 10px 15px;
-            border: none;
-            background: none;
-            cursor: pointer;
-            font-weight: 600;
-            color: #999;
-            border-bottom: 3px solid transparent;
-            transition: all 0.3s;
-            font-size: 14px;
-        }
-
-        .tab-btn.active {
-            color: #667eea;
-            border-bottom-color: #667eea;
-        }
-
-        .tab-content {
-            display: none;
-        }
-
-        .tab-content.active {
-            display: block;
-        }
-
-        .code-block {
-            background: #f5f5f5;
-            padding: 12px;
-            border-radius: 4px;
-            font-family: 'Monaco', 'Courier New', monospace;
-            font-size: 12px;
-            overflow-x: auto;
-            margin: 10px 0;
-            border-left: 4px solid #667eea;
-        }
-
-        .footer {
-            grid-column: 1 / -1;
-            text-align: center;
-            margin-top: 20px;
-            padding-top: 20px;
-            border-top: 2px solid #e0e0e0;
-            color: #999;
-            font-size: 12px;
-        }
-    </style>
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="container">
@@ -324,6 +22,13 @@
             <div class="form-group">
                 <label for="resume">Candidate Resume</label>
                 <textarea id="resume" placeholder="Paste the candidate's resume here..."></textarea>
+                <div class="upload-area">
+                    <label for="resumeFile" class="upload-label">
+                        📄 Or upload a file (PDF, DOCX, TXT)
+                    </label>
+                    <input type="file" id="resumeFile" accept=".pdf,.docx,.txt" onchange="handleFileUpload(event)">
+                    <span id="uploadStatus" class="upload-status"></span>
+                </div>
             </div>
 
             <div class="button-group">
@@ -505,6 +210,38 @@
 
         function formatText(text) {
             return text.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        }
+
+        async function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const status = document.getElementById('uploadStatus');
+            status.textContent = 'Uploading...';
+            status.className = 'upload-status status-info';
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch(`${API_BASE}/upload-resume`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.detail || 'Upload failed');
+                }
+
+                const data = await response.json();
+                document.getElementById('resume').value = data.text;
+                status.textContent = `Loaded: ${file.name}`;
+                status.className = 'upload-status status-success';
+            } catch (error) {
+                status.textContent = `Error: ${error.message}`;
+                status.className = 'upload-status status-error';
+            }
         }
 
         function loadSample() {
