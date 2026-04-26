@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Skill Assessment & Learning Plan Agent</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎯 Skill Assessment & Learning Plan Agent</h1>
+            <p>AI-powered conversational assessment with personalized learning roadmap</p>
+        </div>
+
+        <div class="input-section">
+            <div class="form-group">
+                <label for="jobDesc">Job Description</label>
+                <textarea id="jobDesc" placeholder="Paste the job description here..."></textarea>
+            </div>
+
+            <div class="form-group">
+                <label for="resume">Candidate Resume</label>
+                <textarea id="resume" placeholder="Paste the candidate's resume here..."></textarea>
+                <div class="upload-area">
+                    <label for="resumeFile" class="upload-label">
+                        📄 Or upload a file (PDF, DOCX, TXT)
+                    </label>
+                    <input type="file" id="resumeFile" accept=".pdf,.docx,.txt" onchange="handleFileUpload(event)">
+                    <span id="uploadStatus" class="upload-status"></span>
+                </div>
+            </div>
+
+            <div class="button-group">
+                <button class="btn-primary" id="startBtn" onclick="startAssessment()">Start Assessment</button>
+                <button class="btn-secondary" onclick="loadSample()">Load Sample</button>
+            </div>
+        </div>
+
+        <div class="output-section">
+            <div class="tab-buttons">
+                <button class="tab-btn active" onclick="switchTab('assessment')">Assessment Chat</button>
+                <button class="tab-btn" onclick="switchTab('plan')">Learning Plan</button>
+            </div>
+
+            <div id="assessment" class="tab-content active">
+                <div class="loading" id="assessmentLoading">
+                    <div class="spinner"></div>
+                    <p style="margin-top: 15px; color: #667eea;">Analyzing skills...</p>
+                </div>
+                <div class="output-box" id="assessmentOutput" style="display: none;">
+                    <h3>💬 Assessment Chat</h3>
+                    <div id="cameraContainer" style="display: none; margin-bottom: 15px;">
+                        <video id="cameraVideo" autoplay muted style="width: 100%; max-width: 400px; border-radius: 8px; border: 2px solid #667eea;"></video>
+                        <div style="margin-top: 10px;">
+                            <button class="btn-secondary" onclick="stopCamera()" style="margin-right: 10px;">Stop Camera</button>
+                            <span id="cameraStatus" style="color: #667eea;">📹 Camera is on</span>
+                        </div>
+                    </div>
+                    <div id="assessmentContent"></div>
+                    <div id="chatInputArea" style="display: none;">
+                        <div class="chat-input-group">
+                            <textarea id="chatInput" placeholder="Type your answer..." rows="3"></textarea>
+                            <button class="btn-primary" id="sendBtn" onclick="sendMessage()">Send</button>
+                        </div>
+                    </div>
+                    <div id="assessmentComplete" style="display: none;">
+                        <div class="status-message status-success">
+                            Assessment complete! Switch to the <strong>Learning Plan</strong> tab to see your personalized roadmap.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="plan" class="tab-content">
+                <div class="loading" id="planLoading" style="display: none;">
+                    <div class="spinner"></div>
+                    <p style="margin-top: 15px; color: #667eea;">Generating learning plan...</p>
+                </div>
+                <div class="output-box" id="planOutput" style="display: none;">
+                    <h3>📚 Personalized Learning Plan</h3>
+                    <div id="planContent"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>Powered by AI | Deccan AI Catalyst Hackathon 2026</p>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+        let conversationHistory = [];
+        let jobDescription = '';
+        let resumeText = '';
+        let assessmentData = null;
+        let turnCount = 0;
+        const MAX_TURNS = 5;
+        let planNeedsRetry = false;
+        let pendingPlanData = null;
+        let planRetryInterval = null;
+        let cameraStream = null;
+
+        async function getResponseBody(response) {
+            const text = await response.text();
+            try {
+                return JSON.parse(text);
+            } catch (error) {
+                throw new Error(`Invalid JSON response (${response.status}): ${text}`);
+            }
+        }
+
+        async function handleApiError(response) {
+            const data = await getResponseBody(response);
+            if (response.status === 429) {
+                const detail = data.detail || {};
+                const waitSec = detail.retry_after_seconds || 60;
+                const msg = detail.message || 'Rate limit exceeded';
+                return { isRateLimit: true, waitSeconds: waitSec, message: msg };
+            }
+            throw new Error(data.detail?.message || data.detail || 'Request failed');
+        }
+
+        function showRateLimitCountdown(waitSeconds, onComplete) {
+            let remaining = waitSeconds;
+            const id = 'rateLimitTimer';
+            // Remove any existing timer
+            const existing = document.getElementById(id);
+            if (existing) existing.remove();
+
+            const timerDiv = document.createElement('div');
+            timerDiv.id = id;
+            timerDiv.className = 'chat-message chat-system';
+            timerDiv.innerHTML = `<strong>Rate limit hit (free API tier).</strong> Retrying in <span id="countdown">${remaining}</span>s...`;
+            document.getElementById('assessmentContent').appendChild(timerDiv);
+
+            const interval = setInterval(() => {
+                remaining--;
+                const countdownEl = document.getElementById('countdown');
+                if (countdownEl) countdownEl.textContent = remaining;
+                if (remaining <= 0) {
+                    clearInterval(interval);
+                    timerDiv.innerHTML = '<strong>Retrying now...</strong>';
+                    onComplete();
+                }
+            }, 1000);
+        }
+
+        async function startAssessment() {
+            jobDescription = document.getElementById('jobDesc').value.trim();
+            resumeText = document.getElementById('resume').value.trim();
+
+            if (!jobDescription || !resumeText) {
+                alert('Please provide both job description and resume');
+                return;
+            }
+
+            // Reset state
+            conversationHistory = [];
+            assessmentData = null;
+            turnCount = 0;
+            document.getElementById('assessmentContent').innerHTML = '';
+            document.getElementById('assessmentComplete').style.display = 'none';
+            document.getElementById('planOutput').style.display = 'none';
+            document.getElementById('startBtn').disabled = true;
+
+            showLoading('assessment', true);
+            document.getElementById('assessmentOutput').style.display = 'block';
+
+            // Start camera when assessment begins
+            startCamera();
+
+            try {
+                const response = await fetch(`${API_BASE}/assess`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        job_description: jobDescription,
+                        resume: resumeText,
+                        conversation_history: []
+                    })
+                });
+
+                if (response.status === 429) {
+                    const err = await handleApiError(response);
+                    showLoading('assessment', false);
+                    document.getElementById('assessmentOutput').style.display = 'block';
+                    showRateLimitCountdown(err.waitSeconds, () => startAssessment());
+                    return;
+                }
+
+                if (!response.ok) {
+                    const err = await getResponseBody(response);
+                    throw new Error(err.detail || `Assessment failed (${response.status})`);
+                }
+
+                const data = await getResponseBody(response);
+                showLoading('assessment', false);
+                appendMessage('assistant', data.message);
+                turnCount++;
+
+                if (data.is_complete && data.assessment_data) {
+                    finishAssessment(data.assessment_data);
+                } else {
+                    // Build the initial context message the same way the backend does
+                    // so follow-up calls have the full history
+                    conversationHistory.push({
+                        role: 'user',
+                        content: `CANDIDATE RESUME:\n${resumeText}\n\nPlease assess the candidate's proficiency in the required skills based on their resume.\nAsk targeted questions to verify their real proficiency level.\n\nStart the skill assessment by introducing yourself and explaining the process. Then ask about the first relevant skill.`
+                    });
+                    conversationHistory.push({ role: 'assistant', content: data.message });
+                    document.getElementById('chatInputArea').style.display = 'block';
+                    document.getElementById('chatInput').focus();
+                }
+            } catch (error) {
+                showLoading('assessment', false);
+                showError('assessment', error.message);
+                document.getElementById('startBtn').disabled = false;
+                
+                // Stop camera if assessment fails
+                stopCamera();
+            }
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('chatInput');
+            const userMessage = input.value.trim();
+            if (!userMessage) return;
+
+            input.value = '';
+            appendMessage('user', userMessage);
+            conversationHistory.push({ role: 'user', content: userMessage });
+            turnCount++;
+
+            document.getElementById('sendBtn').disabled = true;
+            showLoading('assessment', true);
+
+            try {
+                const response = await fetch(`${API_BASE}/assess`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        job_description: jobDescription,
+                        resume: resumeText,
+                        conversation_history: conversationHistory
+                    })
+                });
+
+                if (response.status === 429) {
+                    const err = await handleApiError(response);
+                    showLoading('assessment', false);
+                    document.getElementById('sendBtn').disabled = false;
+                    // Re-add user message to input since it didn't go through
+                    document.getElementById('chatInput').value = userMessage;
+                    conversationHistory.pop(); // remove the user message we just added
+                    turnCount--;
+                    showRateLimitCountdown(err.waitSeconds, () => {
+                        document.getElementById('chatInput').value = '';
+                        conversationHistory.push({ role: 'user', content: userMessage });
+                        turnCount++;
+                        sendMessage.__retryMessage = userMessage;
+                        sendMessage();
+                    });
+                    return;
+                }
+
+                if (!response.ok) {
+                    const err = await getResponseBody(response);
+                    throw new Error(err.detail || `Assessment failed (${response.status})`);
+                }
+
+                const data = await getResponseBody(response);
+                showLoading('assessment', false);
+                document.getElementById('sendBtn').disabled = false;
+                appendMessage('assistant', data.message);
+                conversationHistory.push({ role: 'assistant', content: data.message });
+                turnCount++;
+
+                if (data.is_complete && data.assessment_data) {
+                    finishAssessment(data.assessment_data);
+                } else if (turnCount >= MAX_TURNS * 2) {
+                    // Auto-finish after max turns with a quick assessment
+                    autoFinishAssessment();
+                } else {
+                    document.getElementById('chatInput').focus();
+                }
+            } catch (error) {
+                showLoading('assessment', false);
+                document.getElementById('sendBtn').disabled = false;
+                appendMessage('system', `Error: ${error.message}`);
+            }
+        }
+
+        async function autoFinishAssessment() {
+            appendMessage('system', 'Wrapping up assessment and generating results...');
+            document.getElementById('chatInputArea').style.display = 'none';
+            showLoading('assessment', true);
+
+            try {
+                const response = await fetch(`${API_BASE}/quick-assessment`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        job_description: jobDescription,
+                        resume: resumeText
+                    })
+                });
+
+                const data = await getResponseBody(response);
+                showLoading('assessment', false);
+                finishAssessment(data);
+            } catch (error) {
+                showLoading('assessment', false);
+                showError('assessment', error.message);
+            }
+        }
+
+        function finishAssessment(data) {
+            assessmentData = data;
+            document.getElementById('chatInputArea').style.display = 'none';
+            document.getElementById('startBtn').disabled = false;
+            
+            // Stop camera when assessment completes
+            stopCamera();
+
+            // Show assessment summary
+            let html = '<h4 style="margin-top:20px">📊 Assessment Summary</h4>';
+            const skills = data.skills_assessed || [];
+            if (Array.isArray(skills) && skills.length > 0) {
+                skills.forEach(skill => {
+                    const level = skill.proficiency_level || skill.candidate_proficiency || 'N/A';
+                    const evidence = skill.evidence || skill.justification || '';
+                    const gap = skill.gap_analysis || '';
+                    html += `
+                        <div class="assessment-message">
+                            <strong>${skill.skill}</strong><br>
+                            Level: <span class="skill-tag">${level}</span><br>
+                            ${evidence ? `Evidence: ${evidence}<br>` : ''}
+                            ${gap ? `Gap: ${gap}` : ''}
+                        </div>
+                    `;
+                });
+            }
+
+            const focusAreas = data.recommended_focus_areas || [];
+            if (Array.isArray(focusAreas) && focusAreas.length > 0) {
+                html += '<h4>Focus Areas</h4>';
+                focusAreas.forEach(area => {
+                    html += `<div class="skill-tag">${area}</div>`;
+                });
+            }
+
+            const adjacent = data.adjacent_skills || [];
+            if (Array.isArray(adjacent) && adjacent.length > 0) {
+                html += '<h4 style="margin-top:15px">Adjacent Skills</h4>';
+                adjacent.forEach(skill => {
+                    html += `<div class="skill-tag" style="background:#764ba2">${skill}</div>`;
+                });
+            }
+
+            document.getElementById('assessmentContent').innerHTML += html;
+            document.getElementById('assessmentComplete').style.display = 'block';
+
+            // Auto-generate learning plan
+            generateLearningPlan(data);
+        }
+
+        function appendMessage(role, text) {
+            const content = document.getElementById('assessmentContent');
+            const div = document.createElement('div');
+
+            if (role === 'assistant') {
+                div.className = 'chat-message chat-assistant';
+                div.innerHTML = `<div class="chat-role">🤖 Interviewer</div><div>${formatText(text)}</div>`;
+            } else if (role === 'user') {
+                div.className = 'chat-message chat-user';
+                div.innerHTML = `<div class="chat-role">👤 You</div><div>${formatText(text)}</div>`;
+            } else {
+                div.className = 'chat-message chat-system';
+                div.innerHTML = `<div>${formatText(text)}</div>`;
+            }
+
+            content.appendChild(div);
+            // Scroll to bottom
+            const outputBox = document.getElementById('assessmentOutput');
+            outputBox.scrollTop = outputBox.scrollHeight;
+        }
+
+        async function generateLearningPlan(assessmentResults) {
+            showLoading('plan', true);
+            document.getElementById('planOutput').style.display = 'block';
+            try {
+                const response = await fetch(`${API_BASE}/generate-plan`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        assessment_results: assessmentResults,
+                        candidate_name: 'Candidate'
+                    })
+                });
+
+                if (response.status === 429) {
+                    let waitSeconds = 10;
+                    try {
+                        const errData = await response.json();
+                        const detail = errData.detail || {};
+                        if (typeof detail === 'object' && detail.retry_after_seconds) {
+                            waitSeconds = detail.retry_after_seconds;
+                        }
+                    } catch (e) {}
+
+                    showLoading('plan', false);
+                    planNeedsRetry = true;
+                    pendingPlanData = assessmentResults;
+                    const planContent = document.getElementById('planContent');
+                    let remaining = waitSeconds;
+                    planContent.innerHTML = `<div class="rate-limit-banner">
+                        <strong>⏳ Rate limit hit (free API tier)</strong><br>
+                        Auto-retrying in <span id="planCountdown">${remaining}</span> seconds...<br>
+                        <small>Or switch tabs and come back to retry manually.</small>
+                    </div>`;
+
+                    if (planRetryInterval) clearInterval(planRetryInterval);
+                    planRetryInterval = setInterval(() => {
+                        remaining--;
+                        const el = document.getElementById('planCountdown');
+                        if (el) el.textContent = remaining;
+                        if (remaining <= 0) {
+                            clearInterval(planRetryInterval);
+                            planRetryInterval = null;
+                            planNeedsRetry = false;
+                            generateLearningPlan(assessmentResults);
+                        }
+                    }, 1000);
+                    return;
+                }
+
+                if (!response.ok) {
+                    const err = await getResponseBody(response);
+                    const msg = typeof err.detail === 'object' ? err.detail.message : (err.detail || `Plan generation failed (${response.status})`);
+                    throw new Error(msg);
+                }
+
+                const data = await getResponseBody(response);
+                planNeedsRetry = false;
+                pendingPlanData = null;
+                displayLearningPlan(data);
+            } catch (error) {
+                showLoading('plan', false);
+                showError('plan', error.message);
+            }
+        }
+
+        function displayLearningPlan(data) {
+            const content = document.getElementById('planContent');
+            let html = '';
+
+            const plan = data.learning_plan || data;
+
+            if (plan.learning_path && Array.isArray(plan.learning_path)) {
+                plan.learning_path.forEach((phase, idx) => {
+                    const skills = Array.isArray(phase.skills) ? phase.skills : [];
+                    const resources = Array.isArray(phase.resources) ? phase.resources : [];
+                    html += `
+                        <div class="learning-plan">
+                            <h4>Phase ${idx + 1}: ${phase.title || 'Phase ' + (idx+1)}</h4>
+                            <p><strong>Duration:</strong> ${phase.duration_weeks || '?'} weeks</p>
+                            ${skills.length ? `<p><strong>Skills:</strong></p>
+                            <div>${skills.map(s => `<span class="skill-tag">${s}</span>`).join('')}</div>` : ''}
+                            ${resources.length ? `<p style="margin-top: 10px;"><strong>Resources:</strong></p>
+                            <ul>
+                                ${resources.map(r => `
+                                    <li>${r.title || r.name || 'Resource'} (${r.type || 'resource'})${r.estimated_hours ? ' - ' + r.estimated_hours + 'h' : ''}</li>
+                                `).join('')}
+                            </ul>` : ''}
+                            ${phase.project ? `<p style="margin-top: 10px;"><strong>Project:</strong> ${phase.project}</p>` : ''}
+                        </div>
+                    `;
+                });
+
+                if (plan.total_duration_weeks || plan.success_metrics) {
+                    html += `<div class="learning-plan" style="margin-top: 20px;">`;
+                    if (plan.total_duration_weeks) {
+                        html += `<h4>Total Duration</h4><p>${plan.total_duration_weeks} weeks</p>`;
+                    }
+                    if (plan.success_metrics && Array.isArray(plan.success_metrics)) {
+                        html += `<h4>Success Metrics</h4>
+                        <ul>${plan.success_metrics.map(m => `<li>${m}</li>`).join('')}</ul>`;
+                    }
+                    html += `</div>`;
+                }
+            } else if (plan.raw_plan) {
+                html = `<div class="assessment-message">${formatText(plan.raw_plan)}</div>`;
+            } else {
+                html = `<div class="assessment-message">${formatText(JSON.stringify(plan, null, 2))}</div>`;
+            }
+
+            content.innerHTML = html;
+            showLoading('plan', false);
+            document.getElementById('planOutput').style.display = 'block';
+        }
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById(tab).classList.add('active');
+            event.target.classList.add('active');
+
+            // Retry plan generation when switching to plan tab
+            if (tab === 'plan' && planNeedsRetry && pendingPlanData) {
+                if (planRetryInterval) {
+                    clearInterval(planRetryInterval);
+                    planRetryInterval = null;
+                }
+                planNeedsRetry = false;
+                generateLearningPlan(pendingPlanData);
+            }
+        }
+
+        function showLoading(section, show) {
+            document.getElementById(`${section}Loading`).style.display = show ? 'block' : 'none';
+        }
+
+        function showError(section, message) {
+            showLoading(section, false);
+            const errorMsg = typeof message === 'object' ? (message.message || JSON.stringify(message)) : message;
+            if (section === 'assessment') {
+                appendMessage('system', `Error: ${errorMsg}`);
+                document.getElementById('assessmentOutput').style.display = 'block';
+            } else {
+                const content = document.getElementById(`${section}Content`);
+                content.innerHTML = `<div class="status-message status-error">Error: ${errorMsg}</div>`;
+                document.getElementById(`${section}Output`).style.display = 'block';
+            }
+        }
+
+        function formatText(text) {
+            return text.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        }
+
+        async function startCamera() {
+            try {
+                const video = document.getElementById('cameraVideo');
+                const container = document.getElementById('cameraContainer');
+                
+                // Request camera access
+                cameraStream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        width: { ideal: 640 },
+                        height: { ideal: 480 }
+                    } 
+                });
+                
+                // Attach stream to video element
+                video.srcObject = cameraStream;
+                
+                // Show camera container
+                container.style.display = 'block';
+                
+                console.log('Camera started successfully');
+            } catch (error) {
+                console.error('Error accessing camera:', error);
+                alert('Unable to access camera. Please ensure you have granted camera permissions.');
+            }
+        }
+
+        function stopCamera() {
+            if (cameraStream) {
+                // Stop all tracks
+                cameraStream.getTracks().forEach(track => track.stop());
+                cameraStream = null;
+                
+                // Hide camera container
+                document.getElementById('cameraContainer').style.display = 'none';
+                
+                console.log('Camera stopped');
+            }
+        }
+
+        // Allow Enter to send in chat
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey && document.activeElement.id === 'chatInput') {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        async function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const status = document.getElementById('uploadStatus');
+            status.textContent = 'Uploading...';
+            status.className = 'upload-status status-info';
+
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+
+                const response = await fetch(`${API_BASE}/upload-resume`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        file: base64,
+                        filename: file.name
+                    })
+                });
+
+                if (!response.ok) {
+                    const err = await getResponseBody(response);
+                    throw new Error(err.detail || `Upload failed (${response.status})`);
+                }
+
+                const data = await getResponseBody(response);
+                document.getElementById('resume').value = data.text;
+                status.textContent = `Loaded: ${file.name}`;
+                status.className = 'upload-status status-success';
+            } catch (error) {
+                status.textContent = `Error: ${error.message}`;
+                status.className = 'upload-status status-error';
+            }
+        }
+
+        function loadSample() {
+            document.getElementById('jobDesc').value = `Senior Full-Stack Engineer
+
+We're looking for a Senior Full-Stack Engineer to join our team. You'll work on our platform using Python, React, and cloud technologies.
+
+Required Skills:
+- 5+ years of software development experience
+- Python (Django/FastAPI)
+- React and JavaScript
+- AWS/Cloud platforms
+- SQL and Database Design
+- RESTful API Design
+- Git and CI/CD
+- Problem-solving and communication
+
+Nice to have:
+- Docker and Kubernetes
+- Microservices architecture
+- GraphQL
+- ML/AI integration`;
+
+            document.getElementById('resume').value = `John Doe
+Email: john@example.com | GitHub: github.com/johndoe
+
+SUMMARY
+5 years of full-stack development experience. Built scalable web applications using Python and React. Currently working at TechCorp on cloud-based solutions.
+
+SKILLS
+Python, Django, FastAPI, JavaScript, React, HTML/CSS, PostgreSQL, AWS EC2/S3, Git, REST APIs, Docker
+
+EXPERIENCE
+Senior Developer - TechCorp (2021-Present)
+- Built REST APIs using FastAPI
+- Developed React dashboards for 100K+ users
+- Managed AWS infrastructure
+- Mentored junior developers
+
+Full Stack Developer - StartupXYZ (2019-2021)
+- Developed Django web applications
+- Implemented React frontend components
+- Database design and optimization
+- Deployed on AWS using Docker
+
+EDUCATION
+BS Computer Science - State University (2019)
+
+CERTIFICATIONS
+AWS Solutions Architect Associate (2022)`;
+        }
+    </script>
+</body>
+</html>
