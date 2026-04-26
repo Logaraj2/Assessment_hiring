@@ -86,14 +86,12 @@ exports.handler = async function(event, context) {
     });
 
     if (response.status === 429) {
-      const waitSeconds = 60;
+      const errorText = await response.text();
       return {
         statusCode: 429,
-        body: JSON.stringify({
-          detail: {
-            message: `Rate limit exceeded (free API tier). Please wait ${waitSeconds} seconds.`,
-            retry_after_seconds: waitSeconds
-          }
+        body: JSON.stringify({ 
+          detail: 'Rate limit exceeded',
+          message: errorText
         })
       };
     }

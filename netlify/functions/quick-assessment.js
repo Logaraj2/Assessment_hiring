@@ -83,6 +83,17 @@ Respond in JSON format with this structure:
       })
     });
 
+    if (response.status === 429) {
+      const errorText = await response.text();
+      return {
+        statusCode: 429,
+        body: JSON.stringify({ 
+          detail: 'Rate limit exceeded',
+          message: errorText
+        })
+      };
+    }
+
     if (!response.ok) {
       const errorText = await response.text();
       return {
