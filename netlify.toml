@@ -4,9 +4,3 @@
 
 [build.environment]
   NODE_VERSION = "18"
-
-
-[dev]
-  functions = "frontend/functions"
-  publish = "frontend"
-  port = 8888
