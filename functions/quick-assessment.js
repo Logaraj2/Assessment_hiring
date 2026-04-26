@@ -1,4 +1,47 @@
 exports.handler = async function(event, context) {
+  const MODEL_CANDIDATES = (process.env.OPENROUTER_MODELS || '')
+    .split(',')
+    .map(model => model.trim())
+    .filter(Boolean);
+
+  if (MODEL_CANDIDATES.length === 0) {
+    MODEL_CANDIDATES.push(
+      'google/gemma-3-12b-it:free',
+      'meta-llama/llama-3.1-8b-instruct:free',
+      'mistralai/mistral-7b-instruct:free'
+    );
+  }
+
+  async function callOpenRouterWithFallback(apiKey, prompt) {
+    let lastResponse = null;
+    let lastText = '';
+
+    for (const model of MODEL_CANDIDATES) {
+      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://skill-assessment-agent.app',
+          'X-Title': 'Skill Assessment Agent'
+        },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: 'user', content: prompt }],
+          max_tokens: 2000
+        })
+      });
+
+      if (response.ok) return response;
+
+      lastResponse = response;
+      lastText = await response.text();
+      if (response.status !== 429) break;
+    }
+
+    return { failed: true, status: lastResponse?.status || 500, text: lastText };
+  }
+
   // Handle CORS preflight
   if (event.httpMethod === 'OPTIONS') {
     return {
@@ -60,31 +103,25 @@ Respond in JSON format with this structure:
   "adjacent_skills": ["Skill 1", "Skill 2"]
 }`;
 
-    // Call OpenRouter API
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://skill-assessment-agent.app',
-        'X-Title': 'Skill Assessment Agent'
-      },
-      body: JSON.stringify({
-        model: 'google/gemma-3-12b-it:free',
-        messages: [
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        max_tokens: 2000
-      })
-    });
+    const response = await callOpenRouterWithFallback(apiKey, prompt);
 
-    if (!response.ok) {
-      const errorText = await response.text();
+    if (response.failed && response.status === 429) {
+      const waitSeconds = 60;
       return {
-        statusCode: response.status,
+        statusCode: 429,
+        body: JSON.stringify({
+          detail: {
+            message: `Rate limit exceeded (free API tier). Please wait ${waitSeconds} seconds.`,
+            retry_after_seconds: waitSeconds
+          }
+        })
+      };
+    }
+
+    if (response.failed || !response.ok) {
+      const errorText = response.text || await response.text();
+      return {
+        statusCode: response.status || 500,
         body: JSON.stringify({ 
           detail: 'AI service error',
           message: errorText

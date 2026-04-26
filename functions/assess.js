@@ -12,6 +12,58 @@ Always provide specific evidence from their responses to justify your assessment
 
 Be conversational but professional. Ask one question at a time and wait for the candidate's response before proceeding.`;
 
+const MODEL_CANDIDATES = (process.env.OPENROUTER_MODELS || '')
+  .split(',')
+  .map(model => model.trim())
+  .filter(Boolean);
+
+if (MODEL_CANDIDATES.length === 0) {
+  MODEL_CANDIDATES.push(
+    'google/gemma-3-12b-it:free',
+    'meta-llama/llama-3.1-8b-instruct:free',
+    'mistralai/mistral-7b-instruct:free'
+  );
+}
+
+async function callOpenRouterWithFallback(apiKey, messageContent, title) {
+  let lastResponse = null;
+  let lastText = '';
+
+  for (const model of MODEL_CANDIDATES) {
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://skill-assessment-agent.app',
+        'X-Title': title
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          {
+            role: 'user',
+            content: messageContent
+          }
+        ],
+        max_tokens: 2000
+      })
+    });
+
+    if (response.ok) {
+      return response;
+    }
+
+    lastResponse = response;
+    lastText = await response.text();
+    if (response.status !== 429) {
+      break;
+    }
+  }
+
+  return { failed: true, status: lastResponse?.status || 500, text: lastText };
+}
+
 exports.handler = async function(event, context) {
   // Handle CORS preflight
   if (event.httpMethod === 'OPTIONS') {
@@ -62,28 +114,13 @@ exports.handler = async function(event, context) {
       ];
     }
 
-    // Call OpenRouter API
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://skill-assessment-agent.app',
-        'X-Title': 'Skill Assessment Agent'
-      },
-      body: JSON.stringify({
-        model: 'google/gemma-3-12b-it:free',
-        messages: [
-          {
-            role: 'user',
-            content: `[Instructions: ${ASSESSMENT_SYSTEM_PROMPT}]\n\n${messages[messages.length - 1].content}`
-          }
-        ],
-        max_tokens: 2000
-      })
-    });
+    const response = await callOpenRouterWithFallback(
+      apiKey,
+      `[Instructions: ${ASSESSMENT_SYSTEM_PROMPT}]\n\n${messages[messages.length - 1].content}`,
+      'Skill Assessment Agent'
+    );
 
-    if (response.status === 429) {
+    if (response.failed && response.status === 429) {
       const waitSeconds = 60;
       return {
         statusCode: 429,
@@ -96,10 +133,10 @@ exports.handler = async function(event, context) {
       };
     }
 
-    if (!response.ok) {
-      const errorText = await response.text();
+    if (response.failed || !response.ok) {
+      const errorText = response.text || await response.text();
       return {
-        statusCode: response.status,
+        statusCode: response.status || 500,
         body: JSON.stringify({ 
           detail: 'AI service error',
           message: errorText
