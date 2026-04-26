@@ -1,12 +1,17 @@
 [build]
-  publish = "."
+  publish = "frontend"
   functions = "functions"
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+  force = true
 
 [build.environment]
   NODE_VERSION = "18"
 
-
 [dev]
   functions = "functions"
-  publish = "."
+  publish = "frontend"
   port = 8888
