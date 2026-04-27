@@ -161,14 +161,27 @@ Ask the next relevant question to assess the candidate's skills. If you have eno
                                     "assessment_data": None
                                 }
                         else:
-                            # Fallback if API fails - show detailed error
-                            error_msg = f"API call failed. Using fallback question. Check your API key and internet connection."
-                            print(f"FALLBACK ACTIVATED: {error_msg}")
-                            response = {
-                                "message": f"⚠️ {error_msg}\n\nFallback question: Tell me about your most recent project experience.",
-                                "is_complete": False,
-                                "assessment_data": None
-                            }
+                            # Fallback if API fails - provide contextual questions
+                            fallback_questions = [
+                                "I see you have Python experience. Can you describe a challenging Python project you've worked on?",
+                                "Tell me about your experience with React and any complex components you've built.",
+                                "How have you used AWS or cloud services in your previous projects?",
+                                "Describe your experience with database design and SQL optimization.",
+                                "What's your approach to testing and code quality in your development process?",
+                                "Can you explain a time you had to optimize application performance?",
+                                "How do you handle version control and team collaboration using Git?",
+                                "Tell me about your experience with RESTful API design and implementation."
+                            ]
+                    
+                    # Use conversation length to pick different fallback questions
+                    question_index = len(conversation) // 2
+                    fallback_question = fallback_questions[min(question_index, len(fallback_questions) - 1)]
+                    
+                    response = {
+                        "message": f"🤖 AI Service temporarily unavailable. Here's my next question:\n\n{fallback_question}",
+                        "is_complete": False,
+                        "assessment_data": None
+                    }
                         
                 except Exception as e:
                     response = {
