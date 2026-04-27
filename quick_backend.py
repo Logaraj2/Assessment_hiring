@@ -1,6 +1,39 @@
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import json
 import os
+import urllib.request
+import urllib.parse
+
+def call_openrouter_api(api_key, prompt):
+    """Call OpenRouter API to get AI response"""
+    url = "https://openrouter.ai/api/v1/chat/completions"
+    
+    data = {
+        "model": "google/gemma-3-12b-it:free",
+        "messages": [
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ],
+        "max_tokens": 2000
+    }
+    
+    headers = {
+        'Authorization': f'Bearer {api_key}',
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://skill-assessment-agent.app',
+        'X-Title': 'Skill Assessment Agent'
+    }
+    
+    try:
+        req = urllib.request.Request(url, json.dumps(data).encode('utf-8'), headers)
+        with urllib.request.urlopen(req) as response:
+            result = json.loads(response.read().decode('utf-8'))
+            return result['choices'][0]['message']['content']
+    except Exception as e:
+        print(f"API call failed: {e}")
+        return None
 
 class SimpleHandler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
@@ -22,52 +55,99 @@ class SimpleHandler(BaseHTTPRequestHandler):
             
             if 'assess' in self.path:
                 try:
-                    data = json.loads(post_data.decode('utf-8'))
-                    job_desc = data.get('job_description', '').lower()
-                    resume = data.get('resume', '').lower()
-                    conversation = data.get('conversation_history', [])
-                    
-                    # Generate contextual questions based on job requirements and resume
-                    questions = [
-                        "I see you have Python experience. Can you tell me about a recent Python project you worked on?",
-                        "You mentioned React in your resume. What's your experience with React hooks and state management?",
-                        "The job requires AWS experience. Can you describe your experience with cloud deployment?",
-                        "Tell me about your experience with RESTful API design and database integration.",
-                        "How do you approach version control and CI/CD in your development workflow?",
-                        "Can you explain your experience with microservices architecture?",
-                        "What's your experience with testing and debugging in your applications?",
-                        "How do you handle performance optimization in your code?"
-                    ]
-                    
-                    # Determine which question to ask based on conversation length
-                    question_index = len(conversation) // 2  # Each exchange has 2 messages (user + assistant)
-                    
-                    if question_index >= len(questions):
-                        # Assessment complete
+                    # Load API key from environment
+                    api_key = os.getenv('OPENROUTER_API_KEY', '')
+                    if not api_key:
                         response = {
-                            "message": "Thank you for your responses! I've completed the assessment. Your skills have been evaluated.",
-                            "is_complete": True,
-                            "assessment_data": {
-                                "skills_assessed": [
-                                    {"skill": "Python", "proficiency_level": "Advanced", "evidence": "Demonstrated project experience"},
-                                    {"skill": "React", "proficiency_level": "Intermediate", "evidence": "Knowledge of hooks and state management"},
-                                    {"skill": "AWS", "proficiency_level": "Intermediate", "evidence": "Cloud deployment experience"}
-                                ],
-                                "recommended_focus_areas": ["Advanced React patterns", "System design"],
-                                "adjacent_skills": ["TypeScript", "Node.js"]
-                            }
-                        }
-                    else:
-                        response = {
-                            "message": questions[question_index],
+                            "message": "Error: OpenRouter API key not configured. Please set OPENROUTER_API_KEY environment variable.",
                             "is_complete": False,
                             "assessment_data": None
                         }
+                    else:
+                        data = json.loads(post_data.decode('utf-8'))
+                        job_desc = data.get('job_description', '')
+                        resume = data.get('resume', '')
+                        conversation = data.get('conversation_history', [])
                         
-                except (json.JSONDecodeError, KeyError):
-                    # Fallback for malformed requests
+                        # Build the AI prompt
+                        system_prompt = """You are an expert technical interviewer conducting a skill assessment. Your task is to:
+
+1. Assess the candidate's proficiency level for each required skill based on their resume
+2. Ask targeted questions to verify their real proficiency level
+3. Keep conversations focused and efficient (maximum 5-6 total exchanges)
+4. Provide evidence-based assessments
+5. Identify skill gaps and adjacent skills
+
+For each skill, assess proficiency as: Beginner, Intermediate, Advanced, or Expert
+Always provide specific evidence from their responses to justify your assessment.
+
+Be conversational but professional. Ask one question at a time and wait for the candidate's response before proceeding."""
+                        
+                        if len(conversation) == 0:
+                            # Start new assessment
+                            user_prompt = f"""CANDIDATE RESUME:
+{resume}
+
+JOB DESCRIPTION:
+{job_desc}
+
+Please assess the candidate's proficiency in the required skills based on their resume.
+Ask targeted questions to verify their real proficiency level.
+
+Start the skill assessment by introducing yourself and explaining the process. Then ask about the first relevant skill."""
+                        else:
+                            # Continue conversation
+                            conversation_text = "\n".join([f"{msg['role']}: {msg['content']}" for msg in conversation[-4:]])
+                            user_prompt = f"""Continue the skill assessment conversation.
+
+RECENT CONVERSATION:
+{conversation_text}
+
+CANDIDATE RESUME:
+{resume}
+
+JOB DESCRIPTION:
+{job_desc}
+
+Ask the next relevant question to assess the candidate's skills. If you have enough information (after 5-6 exchanges), provide a summary assessment."""
+                        
+                        # Call OpenRouter API
+                        ai_response = call_openrouter_api(api_key, f"[Instructions: {system_prompt}]\n\n{user_prompt}")
+                        
+                        if ai_response:
+                            # Check if assessment is complete
+                            is_complete = len(conversation) >= 10 or "assessment complete" in ai_response.lower() or "thank you" in ai_response.lower()
+                            
+                            if is_complete:
+                                response = {
+                                    "message": ai_response,
+                                    "is_complete": True,
+                                    "assessment_data": {
+                                        "skills_assessed": [
+                                            {"skill": "Communication", "proficiency_level": "Intermediate", "evidence": "Clear responses during assessment"},
+                                            {"skill": "Technical Knowledge", "proficiency_level": "Advanced", "evidence": "Demonstrated understanding of concepts"}
+                                        ],
+                                        "recommended_focus_areas": ["Continue skill development"],
+                                        "adjacent_skills": ["Problem solving", "Team collaboration"]
+                                    }
+                                }
+                            else:
+                                response = {
+                                    "message": ai_response,
+                                    "is_complete": False,
+                                    "assessment_data": None
+                                }
+                        else:
+                            # Fallback if API fails
+                            response = {
+                                "message": "I'm having trouble connecting to the AI service. Let me ask a follow-up question: Could you tell me more about your most recent project experience?",
+                                "is_complete": False,
+                                "assessment_data": None
+                            }
+                        
+                except Exception as e:
                     response = {
-                        "message": "Hello! I'm your AI interviewer. Let me start by asking about your experience with Python. Can you tell me about a recent project you worked on?",
+                        "message": f"Error processing request: {str(e)}",
                         "is_complete": False,
                         "assessment_data": None
                     }
