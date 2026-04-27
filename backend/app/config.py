@@ -1,14 +1,15 @@
-from pydantic_settings import BaseSettings
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
-class Settings(BaseSettings):
-    openrouter_api_key: str = ""
-    openrouter_base_url: str = "https://openrouter.ai/api/v1/chat/completions"
-    ai_model: str = "google/gemma-3-12b-it:free"
-    cors_origins: list[str] = ["*"]
-
-    class Config:
-        env_file = ".env"
+class Settings:
+    def __init__(self):
+        self.openrouter_api_key = os.getenv("OPENROUTER_API_KEY", "")
+        self.openrouter_base_url = "https://openrouter.ai/api/v1/chat/completions"
+        self.ai_model = os.getenv("AI_MODEL", "google/gemma-3-12b-it:free")
+        self.cors_origins = ["*"]
 
 
 settings = Settings()
