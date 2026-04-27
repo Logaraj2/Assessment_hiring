@@ -40,9 +40,20 @@ def call_openrouter_api(api_key, prompt):
         req = urllib.request.Request(url, json.dumps(data).encode('utf-8'), headers)
         with urllib.request.urlopen(req) as response:
             result = json.loads(response.read().decode('utf-8'))
+            print(f"API Response Status: {response.getcode()}")
             return result['choices'][0]['message']['content']
+    except urllib.error.HTTPError as e:
+        print(f"HTTP Error: {e.code} - {e.reason}")
+        print(f"Response: {e.read().decode('utf-8')}")
+        return None
+    except urllib.error.URLError as e:
+        print(f"URL Error: {e.reason}")
+        return None
+    except json.JSONDecodeError as e:
+        print(f"JSON Decode Error: {e}")
+        return None
     except Exception as e:
-        print(f"API call failed: {e}")
+        print(f"API call failed: {type(e).__name__}: {e}")
         return None
 
 class SimpleHandler(BaseHTTPRequestHandler):
@@ -150,9 +161,11 @@ Ask the next relevant question to assess the candidate's skills. If you have eno
                                     "assessment_data": None
                                 }
                         else:
-                            # Fallback if API fails
+                            # Fallback if API fails - show detailed error
+                            error_msg = f"API call failed. Using fallback question. Check your API key and internet connection."
+                            print(f"FALLBACK ACTIVATED: {error_msg}")
                             response = {
-                                "message": "I'm having trouble connecting to the AI service. Let me ask a follow-up question: Could you tell me more about your most recent project experience?",
+                                "message": f"⚠️ {error_msg}\n\nFallback question: Tell me about your most recent project experience.",
                                 "is_complete": False,
                                 "assessment_data": None
                             }
