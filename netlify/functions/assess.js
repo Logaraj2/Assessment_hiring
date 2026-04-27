@@ -86,23 +86,61 @@ exports.handler = async function(event, context) {
     });
 
     if (response.status === 429) {
-      const errorText = await response.text();
+      // Return fallback question instead of error
+      const fallbackQuestions = [
+        "I see you have Python experience. Can you describe a challenging Python project you've worked on?",
+        "Tell me about your experience with React and any complex components you've built.",
+        "How have you used AWS or cloud services in your previous projects?",
+        "Describe your experience with database design and SQL optimization.",
+        "What's your approach to testing and code quality in your development process?",
+        "Can you explain a time you had to optimize application performance?",
+        "How do you handle version control and team collaboration using Git?",
+        "Tell me about your experience with RESTful API design and implementation."
+      ];
+      
+      const questionIndex = Math.floor(Math.random() * fallbackQuestions.length);
       return {
-        statusCode: 429,
-        body: JSON.stringify({ 
-          detail: 'Rate limit exceeded',
-          message: errorText
+        statusCode: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Headers': 'Content-Type',
+          'Access-Control-Allow-Methods': 'POST, OPTIONS'
+        },
+        body: JSON.stringify({
+          message: fallbackQuestions[questionIndex],
+          is_complete: false,
+          assessment_data: null
         })
       };
     }
 
     if (!response.ok) {
-      const errorText = await response.text();
+      // Return fallback question instead of error
+      const fallbackQuestions = [
+        "I see you have Python experience. Can you describe a challenging Python project you've worked on?",
+        "Tell me about your experience with React and any complex components you've built.",
+        "How have you used AWS or cloud services in your previous projects?",
+        "Describe your experience with database design and SQL optimization.",
+        "What's your approach to testing and code quality in your development process?",
+        "Can you explain a time you had to optimize application performance?",
+        "How do you handle version control and team collaboration using Git?",
+        "Tell me about your experience with RESTful API design and implementation."
+      ];
+      
+      const questionIndex = Math.floor(Math.random() * fallbackQuestions.length);
       return {
-        statusCode: response.status,
-        body: JSON.stringify({ 
-          detail: 'AI service error',
-          message: errorText
+        statusCode: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Headers': 'Content-Type',
+          'Access-Control-Allow-Methods': 'POST, OPTIONS'
+        },
+        body: JSON.stringify({
+          message: fallbackQuestions[questionIndex],
+          is_complete: false,
+          assessment_data: null
         })
       };
     }
@@ -143,11 +181,31 @@ exports.handler = async function(event, context) {
 
   } catch (error) {
     console.error('Error in assess function:', error);
+    // Return fallback question instead of error
+    const fallbackQuestions = [
+      "I see you have Python experience. Can you describe a challenging Python project you've worked on?",
+      "Tell me about your experience with React and any complex components you've built.",
+      "How have you used AWS or cloud services in your previous projects?",
+      "Describe your experience with database design and SQL optimization.",
+      "What's your approach to testing and code quality in your development process?",
+      "Can you explain a time you had to optimize application performance?",
+      "How do you handle version control and team collaboration using Git?",
+      "Tell me about your experience with RESTful API design and implementation."
+    ];
+    
+    const questionIndex = Math.floor(Math.random() * fallbackQuestions.length);
     return {
-      statusCode: 500,
-      body: JSON.stringify({ 
-        detail: 'Internal server error',
-        message: error.message 
+      statusCode: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS'
+      },
+      body: JSON.stringify({
+        message: fallbackQuestions[questionIndex],
+        is_complete: false,
+        assessment_data: null
       })
     };
   }
