@@ -4,6 +4,16 @@ import os
 import urllib.request
 import urllib.parse
 
+# Load environment variables from .env file
+try:
+    with open('backend/.env', 'r') as f:
+        for line in f:
+            if line.strip() and not line.startswith('#'):
+                key, value = line.strip().split('=', 1)
+                os.environ[key] = value
+except FileNotFoundError:
+    print("Warning: backend/.env file not found")
+
 def call_openrouter_api(api_key, prompt):
     """Call OpenRouter API to get AI response"""
     url = "https://openrouter.ai/api/v1/chat/completions"
@@ -57,6 +67,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
                 try:
                     # Load API key from environment
                     api_key = os.getenv('OPENROUTER_API_KEY', '')
+                    print(f"API Key found: {'Yes' if api_key else 'No'}")
                     if not api_key:
                         response = {
                             "message": "Error: OpenRouter API key not configured. Please set OPENROUTER_API_KEY environment variable.",
@@ -113,6 +124,7 @@ Ask the next relevant question to assess the candidate's skills. If you have eno
                         
                         # Call OpenRouter API
                         ai_response = call_openrouter_api(api_key, f"[Instructions: {system_prompt}]\n\n{user_prompt}")
+                        print(f"AI Response: {ai_response[:100] if ai_response else 'None'}")
                         
                         if ai_response:
                             # Check if assessment is complete
