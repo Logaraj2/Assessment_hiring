@@ -14,6 +14,9 @@ try:
 except FileNotFoundError:
     print("Warning: backend/.env file not found")
 
+# Set the provided API key directly
+os.environ['OPENROUTER_API_KEY'] = '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'
+
 def call_openrouter_api(api_key, prompt):
     """Call OpenRouter API to get AI response"""
     url = "https://openrouter.ai/api/v1/chat/completions"
@@ -178,11 +181,10 @@ Ask the next relevant question to assess the candidate's skills. If you have eno
                     fallback_question = fallback_questions[min(question_index, len(fallback_questions) - 1)]
                     
                     response = {
-                        "message": f"🤖 AI Service temporarily unavailable. Here's my next question:\n\n{fallback_question}",
-                        "is_complete": False,
-                        "assessment_data": None
-                    }
-                        
+                                "message": fallback_question,
+                                "is_complete": False,
+                                "assessment_data": None
+                            }                  
                 except Exception as e:
                     response = {
                         "message": f"Error processing request: {str(e)}",
