@@ -1,6 +1,7 @@
 [build]
   publish = "frontend"
   functions = "functions"
+# Deploy fix: Remove API error messages
 
 [[redirects]]
   from = "/api/*"
