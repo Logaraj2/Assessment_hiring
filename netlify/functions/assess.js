@@ -37,7 +37,7 @@ exports.handler = async function(event, context) {
     const { job_description, resume, conversation_history } = JSON.parse(event.body);
     
     // Get OpenRouter API key from environment variables
-    const apiKey = process.env.OPENROUTER_API_KEY;
+    const apiKey = process.env.OPENROUTER_API_KEY || process.env.OPENROUTER_API;
     if (!apiKey) {
       return {
         statusCode: 500,
