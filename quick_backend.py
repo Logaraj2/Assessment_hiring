@@ -22,7 +22,7 @@ def call_openrouter_api(api_key, prompt):
     url = "https://openrouter.ai/api/v1/chat/completions"
     
     data = {
-        "model": "google/gemma-3-12b-it:free",
+        "model": "meta-llama/llama-3.3-70b-instruct:free",
         "messages": [
             {
                 "role": "user",
@@ -181,10 +181,10 @@ Ask the next relevant question to assess the candidate's skills. If you have eno
                     fallback_question = fallback_questions[min(question_index, len(fallback_questions) - 1)]
                     
                     response = {
-                                "message": fallback_question,
-                                "is_complete": False,
-                                "assessment_data": None
-                            }                  
+                        "message": fallback_question,
+                        "is_complete": False,
+                        "assessment_data": None
+                    }                  
                 except Exception as e:
                     response = {
                         "message": f"Error processing request: {str(e)}",
